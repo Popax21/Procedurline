@@ -31,7 +31,7 @@ namespace Celeste.Mod.Procedurline {
                 HashSet<string> filteredAnims = dynSprite.Get<HashSet<string>>("filteredAnims");
                 if(filteredAnims == null) return;
                 foreach(Sprite.Animation anim in filteredAnims.Select(a => anims[a])) {
-                    foreach(MTexture frame in anim.Frames) frame.Texture.Dispose();
+                    if(anim != null) foreach(MTexture frame in anim.Frames) frame.Texture.Dispose();
                 }
             });
 
@@ -51,13 +51,13 @@ namespace Celeste.Mod.Procedurline {
                                 //Check if the filtered version is in the sprite cache
                                 DynData<Sprite> dynSprite = new DynData<Sprite>(sprite);
                                 Dictionary<string, Sprite.Animation> cachedAnims = dynSprite.Get<Dictionary<string, Sprite.Animation>>("cachedAnimations");
-                                if(cachedAnims?.ContainsKey(animId) ?? false) return cachedAnims[animId];
+                                if(cachedAnims?.TryGetValue(animId, out Sprite.Animation cachedAnim) ?? false) return cachedAnim ?? dict[animId];
 
                                 //Filter animation
                                 Sprite.Animation anim = dict[animId];
                                 if(cachedAnims == null) dynSprite.Set("cachedAnimations", cachedAnims = new Dictionary<string, Sprite.Animation>(StringComparer.OrdinalIgnoreCase));
-                                cachedAnims[animId] = anim = FilterAnimation(sprite, animId, anim);
-                                return anim;
+                                Sprite.Animation fAnim = cachedAnims[animId] = FilterAnimation(sprite, animId, anim);
+                                return fAnim ?? anim;
                             });
                         }
                     }
@@ -106,11 +106,11 @@ namespace Celeste.Mod.Procedurline {
 
                     if(animId == null) {
                         foreach(Sprite.Animation anim in cachedAnims.Values) {
-                            foreach(MTexture tex in anim.Frames) tex.Texture.Dispose();
+                            if(anim != null) foreach(MTexture tex in anim.Frames) tex.Texture.Dispose();
                         }
                         cachedAnims.Clear();
                     } else {
-                        if(cachedAnims.TryGetValue(animId, out Sprite.Animation anim)) {
+                        if(cachedAnims.TryGetValue(animId, out Sprite.Animation anim) && anim != null) {
                             foreach(MTexture tex in anim.Frames) tex.Texture.Dispose();
                         }
                         cachedAnims.Remove(animId);
@@ -126,23 +126,10 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
-        private MTexture FilterTexture(Sprite sprite, MTexture texture) {
-            //Get texture data
-            TextureData texData = texture.GetTextureData();
-            
-            //Apply filters
-            foreach(AnimationFilter filter in filters) {
-                if(filter.TargetSelector(sprite)) texData = filter.Apply(sprite, null, -1, texData);
-            }
-
-            //Create new texture
-            MTexture nTex = new MTexture(VirtualContent.CreateTexture($"filterTex<{sprite.GetHashCode()}:{texture.AtlasPath}>", texData.Width, texData.Height, Color.White));
-            nTex.AtlasPath = texture.AtlasPath;
-            UploadTexture(nTex, texData);
-            return nTex;
-        }
-
         private Sprite.Animation FilterAnimation(Sprite sprite, string animId, Sprite.Animation animation) {
+            //Check if any filters even apply to this sprite
+            if(!filters.Any(f => f.TargetSelector(sprite))) return null;
+
             //Create texture heap
             TextureHeap heap = new TextureHeap();
 
@@ -165,7 +152,7 @@ namespace Celeste.Mod.Procedurline {
 
             //Create heap texture
             TextureData hTexData = heap.CreateHeapTexture();
-            MTexture hTex = new MTexture(VirtualContent.CreateTexture($"filterHeap<{sprite.GetHashCode()}:{animId}>", hTexData.Width, hTexData.Height, Color.White));
+            MTexture hTex = new MTexture(VirtualContent.CreateTexture($"PCDLE@filterHeap<{sprite.GetHashCode()}:{animId}>", hTexData.Width, hTexData.Height, Color.White));
             UploadTexture(hTex, hTexData);
 
             //Create frame texture

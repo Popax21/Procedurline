@@ -32,7 +32,7 @@ namespace Celeste.Mod.Procedurline {
         internal static void Load() {
             HairOverride DetermineOverride(PlayerHair hair) {
                 foreach(HairOverride o in overrideStack) {
-                    if(o.Selector(hair)) return o;
+                    if(o.TargetSelector(hair)) return o;
                 }
                 return null;
             }
@@ -126,7 +126,7 @@ namespace Celeste.Mod.Procedurline {
         public HairOverride(HairColorData color, HairStyleData style, TargetSelector<PlayerHair> sel) {
             ColorData = color;
             StyleData = style;
-            Selector = sel;
+            TargetSelector = sel;
 
             node = overrideStack.AddFirst(this);
         }
@@ -138,6 +138,6 @@ namespace Celeste.Mod.Procedurline {
 
         public HairColorData ColorData { get; }
         public HairStyleData StyleData { get; }
-        public TargetSelector<PlayerHair> Selector { get; }
+        public TargetSelector<PlayerHair> TargetSelector { get; }
     }
 }
