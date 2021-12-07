@@ -12,14 +12,12 @@ using MonoMod.Utils;
 using MonoMod.RuntimeDetour;
 
 namespace Celeste.Mod.Procedurline {
-    public class AnimationManager : GameComponent {
+    public class AnimationManager : IDisposable {
         private List<AnimationFilter> filters = new List<AnimationFilter>();
-        private List<(MTexture, TextureData)> textureUploadList = new List<(MTexture, TextureData)>();
-
         private On.Monocle.Component.hook_Removed removedHook;
         private List<ILHook> ilHooks = new List<ILHook>();
 
-        internal AnimationManager() : base(Engine.Instance) {
+        internal AnimationManager() {
             //Add removed hook
             On.Monocle.Component.Removed += (removedHook = (On.Monocle.Component.orig_Removed orig, Component comp, Entity entity) => {
                 orig(comp, entity);
@@ -65,22 +63,13 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
-        protected override void Dispose(bool disposing) {
+        public void Dispose() {
             //Remove hooks
             if(removedHook != null) On.Monocle.Component.Removed -= removedHook;
             removedHook = null;
 
             foreach(ILHook h in ilHooks) h.Dispose();
             ilHooks.Clear();
-        }
-
-        public override void Update(GameTime gameTime) {
-            //Upload textures
-            if(textureUploadList.Count > 0) {
-                List<(MTexture texture, TextureData data)> l = textureUploadList;
-                textureUploadList = new List<(MTexture, TextureData)>();
-                foreach(var tex in l) UploadTexture(tex.texture, tex.data);
-            }
         }
 
         public void AddFilter(AnimationFilter filter, bool clearCache = true) {
@@ -153,7 +142,7 @@ namespace Celeste.Mod.Procedurline {
             //Create heap texture
             TextureData hTexData = heap.CreateHeapTexture();
             MTexture hTex = new MTexture(VirtualContent.CreateTexture($"PCDLE@filterHeap<{sprite.GetHashCode()}:{animId}>", hTexData.Width, hTexData.Height, Color.White));
-            UploadTexture(hTex, hTexData);
+            Procedurline.UploadTexture(hTex, hTexData);
 
             //Create frame texture
             MTexture[] fTexs = new MTexture[animation.Frames.Length];
@@ -170,20 +159,13 @@ namespace Celeste.Mod.Procedurline {
             };
         }
 
-        private void UploadTexture(MTexture texture, TextureData data) {
-            if(texture.Texture.Texture_Safe == null) {
-                //Queue for later upload
-                textureUploadList.Add((texture, data));
-            } else texture.Texture.Texture_Safe.SetData<Color>(data.Pixels);
-        }
-
         public bool DebugFilterHeaps { get; set; } = false;
 
         [Command("filterheaps", "Toggles if sprite filter heaps are drawn")]
         private static void DebugToggleFilterHeaps() {
-            if(Module.AnimationManager == null) return;
-            Module.AnimationManager.DebugFilterHeaps = !Module.AnimationManager.DebugFilterHeaps;
-            Module.AnimationManager.ClearFilterCache();
+            if(Procedurline.AnimationManager == null) return;
+            Procedurline.AnimationManager.DebugFilterHeaps = !Procedurline.AnimationManager.DebugFilterHeaps;
+            Procedurline.AnimationManager.ClearFilterCache();
         }
     }
 

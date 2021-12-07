@@ -61,7 +61,7 @@ namespace Celeste.Mod.Procedurline {
                 //Load metadata
                 PlayerAnimMetadata meta;
                 if(!t.Metadata.TryGetMeta<PlayerAnimMetadata>(out meta)) {
-                    Logger.Log(LogLevel.Warn, Module.Name, $"No metadata for player animation '{id}' frame '{t.AtlasPath}'");
+                    Logger.Log(LogLevel.Warn, Procedurline.Name, $"No metadata for player animation '{id}' frame '{t.AtlasPath}'");
                     continue;
                 }
                 metadata[t.AtlasPath] = meta;
@@ -70,12 +70,12 @@ namespace Celeste.Mod.Procedurline {
 
             if(!mode.HasValue) {
                 //Add to wildcard dict
-                if(wildcardAnimations.ContainsKey(id)) Logger.Log(Module.Name, $"Replacing duplicate wildcard player animation '{id}'");
+                if(wildcardAnimations.ContainsKey(id)) Logger.Log(Procedurline.Name, $"Replacing duplicate wildcard player animation '{id}'");
                 wildcardAnimations[id] = anim;
             } else {
                 //Add animation
                 if(!animations.TryGetValue(mode.Value, out var modeAnims)) animations.Add(mode.Value, modeAnims = new Dictionary<string, Sprite.Animation>(StringComparer.OrdinalIgnoreCase));
-                if(modeAnims.ContainsKey(id)) Logger.Log(LogLevel.Warn, Module.Name, $"Replacing duplicate player animation '{id}' for sprite mode '{mode}'");
+                if(modeAnims.ContainsKey(id)) Logger.Log(LogLevel.Warn, Procedurline.Name, $"Replacing duplicate player animation '{id}' for sprite mode '{mode}'");
                 modeAnims[id] = anim;
             }
 
@@ -90,7 +90,7 @@ namespace Celeste.Mod.Procedurline {
                 }
             }
 
-            Logger.Log(Module.Name, $"Added player animation '{id}' for sprite mode '{mode?.ToString() ?? "ANY"}'");
+            Logger.Log(Procedurline.Name, $"Added player animation '{id}' for sprite mode '{mode?.ToString() ?? "ANY"}'");
         }
     }
 }

@@ -6,30 +6,37 @@ using Celeste;
 using Monocle;
 
 namespace Celeste.Mod.Procedurline {
-    public class Module : EverestModule {
-        public static Module Instance { get; private set; }
+    public class Procedurline : EverestModule {
+        public static Procedurline Instance { get; private set; }
         public static string Name => Instance.Metadata.Name;
-        public Module() { Instance = this; }
+        public Procedurline() { Instance = this; }
+
+        private On.Monocle.Scene.hook_BeforeUpdate updateHook;
+        private LinkedList<(MTexture, TextureData)> textureUploadList = new LinkedList<(MTexture, TextureData)>();
 
         private AnimationManager animationManager = null;
         private PlayerAnimationManager playerAnimationManager = null;
 
         public override void Load() {
+            //Add hooks
+            On.Monocle.Scene.BeforeUpdate += updateHook = (orig, scene) => UploadTextures();
+
             //Load content
             HairOverride.Load();
             CustomBooster.Load();
         }
 
         public override void Unload() {
+            //Remove hooks
+            if(updateHook != null) On.Monocle.Scene.BeforeUpdate -= updateHook;
+            updateHook = null;
+
             //Unload content
             HairOverride.Unload();
             CustomBooster.Unload();
             
             //Destroy the animation managers
-            if(animationManager != null) {
-                Engine.Instance.Components.Remove(animationManager);
-                animationManager.Dispose();
-            }
+            if(animationManager != null) animationManager.Dispose();
             animationManager = null;
 
             if(playerAnimationManager != null) playerAnimationManager.Dispose();
@@ -38,7 +45,7 @@ namespace Celeste.Mod.Procedurline {
 
         public override void LoadContent(bool firstLoad) {
             //Create the animation managers
-            Engine.Instance.Components.Add(animationManager = new AnimationManager());
+            animationManager = new AnimationManager();
             playerAnimationManager = new PlayerAnimationManager();
 
             //Load new player animations
@@ -62,6 +69,21 @@ namespace Celeste.Mod.Procedurline {
 
                 //Add animation
                 playerAnimationManager.AddAnimation(default, name, path, 0.15f, new Monocle.Chooser<string>(name));
+            }
+        }
+
+        public static void UploadTexture(MTexture texture, TextureData data) {
+            if(texture.Texture.Texture_Safe == null) {
+                //Queue for later upload
+                Instance.textureUploadList.AddLast((texture, data));
+            } else texture.Texture.Texture_Safe.SetData<Color>(data.Pixels);
+        }
+
+        private void UploadTextures() {
+            if(textureUploadList.Count > 0) {
+                LinkedList<(MTexture texture, TextureData data)> l = textureUploadList;
+                textureUploadList = new LinkedList<(MTexture, TextureData)>();
+                foreach(var tex in l) UploadTexture(tex.texture, tex.data);
             }
         }
 
