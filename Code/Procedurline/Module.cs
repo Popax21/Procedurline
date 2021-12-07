@@ -16,15 +16,20 @@ namespace Celeste.Mod.Procedurline {
 
         public override void Load() {
             //Load content
+            HairOverride.Load();
             CustomBooster.Load();
         }
 
         public override void Unload() {
             //Unload content
+            HairOverride.Unload();
             CustomBooster.Unload();
             
             //Destroy the animation managers
-            if(animationManager != null) animationManager.Dispose();
+            if(animationManager != null) {
+                Engine.Instance.Components.Remove(animationManager);
+                animationManager.Dispose();
+            }
             animationManager = null;
 
             if(playerAnimationManager != null) playerAnimationManager.Dispose();
@@ -33,7 +38,7 @@ namespace Celeste.Mod.Procedurline {
 
         public override void LoadContent(bool firstLoad) {
             //Create the animation managers
-            animationManager = new AnimationManager();
+            Engine.Instance.Components.Add(animationManager = new AnimationManager());
             playerAnimationManager = new PlayerAnimationManager();
 
             //Load new player animations

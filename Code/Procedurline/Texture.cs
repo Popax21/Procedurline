@@ -104,13 +104,13 @@ namespace Celeste.Mod.Procedurline {
                 }
 
                 //Could this texture fit inside of a child?
-                int childWidth = rect.Width / 2, childHeight = rect.Height / 2;
+                int childWidth = (rect.Width-1) / 2, childHeight = (rect.Height-1) / 2;
                 if(tex.Width <= childWidth && tex.Height <= childHeight) {
                     //Create children & allocate in first
                     children = new Node[2,2];
                     for(int cx = 0; cx <= 1; cx++) {
                         for(int cy = 0; cy <= 1; cy++) {
-                            children[cx, cy] = new Node(new Rectangle(rect.X + cx*childWidth, rect.Y + cy*childHeight, childWidth, childHeight));
+                            children[cx, cy] = new Node(new Rectangle(rect.X + cx*(childWidth+1), rect.Y + cy*(childHeight+1), childWidth, childHeight));
                         }
                     }
 
@@ -139,13 +139,13 @@ namespace Celeste.Mod.Procedurline {
                 if(rect.X != 0 || rect.Y != 0) throw new InvalidOperationException();
                 
                 //Create new node
-                Node n = new Node(new Rectangle(0, 0, rect.Width*2, rect.Height*2));
+                Node n = new Node(new Rectangle(0, 0, rect.Width*2+1, rect.Height*2+1));
 
                 if(data != null || children != null) {
                     n.children = new Node[2,2];
                     for(int cx = 0; cx <= 1; cx++) {
                         for(int cy = 0; cy <= 1; cy++) {
-                            n.children[cx, cy] = (cx == 0 && cy == 0) ? this : new Node(new Rectangle(cx*rect.Width, cy*rect.Height, rect.Width, rect.Height));
+                            n.children[cx, cy] = (cx == 0 && cy == 0) ? this : new Node(new Rectangle(cx*(rect.Width+1), cy*(rect.Height+1), rect.Width, rect.Height));
                         }
                     }
                 }

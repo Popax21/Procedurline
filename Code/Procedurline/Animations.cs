@@ -12,27 +12,14 @@ using MonoMod.Utils;
 using MonoMod.RuntimeDetour;
 
 namespace Celeste.Mod.Procedurline {
-    public class AnimationManager : IDisposable {
+    public class AnimationManager : GameComponent {
         private List<AnimationFilter> filters = new List<AnimationFilter>();
         private List<(MTexture, TextureData)> textureUploadList = new List<(MTexture, TextureData)>();
 
-        private On.Celeste.Level.hook_Update levelUpdateHook;
         private On.Monocle.Component.hook_Removed removedHook;
         private List<ILHook> ilHooks = new List<ILHook>();
 
-        internal AnimationManager() {
-            //Add level update hook
-            On.Celeste.Level.Update += (levelUpdateHook = (On.Celeste.Level.orig_Update orig, Level level) => {
-                //Try to upload textures
-                if(textureUploadList.Count > 0) {
-                    List<(MTexture texture, TextureData data)> l = textureUploadList;
-                    textureUploadList = new List<(MTexture, TextureData)>();
-                    foreach(var tex in l) UploadTexture(tex.texture, tex.data);
-                }
-
-                orig(level);
-            });
-
+        internal AnimationManager() : base(Engine.Instance) {
             //Add removed hook
             On.Monocle.Component.Removed += (removedHook = (On.Monocle.Component.orig_Removed orig, Component comp, Entity entity) => {
                 orig(comp, entity);
@@ -78,16 +65,22 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
-        public void Dispose() {
+        protected override void Dispose(bool disposing) {
             //Remove hooks
-            if(levelUpdateHook != null) On.Celeste.Level.Update -= levelUpdateHook;
-            levelUpdateHook = null;
-
             if(removedHook != null) On.Monocle.Component.Removed -= removedHook;
             removedHook = null;
 
             foreach(ILHook h in ilHooks) h.Dispose();
             ilHooks.Clear();
+        }
+
+        public override void Update(GameTime gameTime) {
+            //Upload textures
+            if(textureUploadList.Count > 0) {
+                List<(MTexture texture, TextureData data)> l = textureUploadList;
+                textureUploadList = new List<(MTexture, TextureData)>();
+                foreach(var tex in l) UploadTexture(tex.texture, tex.data);
+            }
         }
 
         public void AddFilter(AnimationFilter filter, bool clearCache = true) {
@@ -108,7 +101,7 @@ namespace Celeste.Mod.Procedurline {
                     //Clear cache
                     DynData<Sprite> dynSprite = new DynData<Sprite>(s);
 
-                    Dictionary<string, Sprite.Animation> cachedAnims = dynSprite.Get<Dictionary<string, Sprite.Animation>>("cachedAnims");
+                    Dictionary<string, Sprite.Animation> cachedAnims = dynSprite.Get<Dictionary<string, Sprite.Animation>>("cachedAnimations");
                     if(cachedAnims == null) continue;
 
                     if(animId == null) {
@@ -143,7 +136,7 @@ namespace Celeste.Mod.Procedurline {
             }
 
             //Create new texture
-            MTexture nTex = new MTexture(VirtualContent.CreateTexture($"filterTex<{texture.AtlasPath}>", texData.Width, texData.Height, Color.White));
+            MTexture nTex = new MTexture(VirtualContent.CreateTexture($"filterTex<{sprite.GetHashCode()}:{texture.AtlasPath}>", texData.Width, texData.Height, Color.White));
             nTex.AtlasPath = texture.AtlasPath;
             UploadTexture(nTex, texData);
             return nTex;
@@ -166,7 +159,7 @@ namespace Celeste.Mod.Procedurline {
                     if(filter.TargetSelector(sprite)) texData = filter.Apply(sprite, animId, i, texData);
                 }
 
-                //Add texture to hep
+                //Add texture to heap
                 fRects[i] = heap.AddTexture(texData);
             }
 

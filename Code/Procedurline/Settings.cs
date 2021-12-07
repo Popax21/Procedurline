@@ -14,9 +14,9 @@ namespace Celeste.Mod.Procedurline {
             DefaultSelection = defaultSelection;
         }
 
-        public string DirectoryPath { get; private set; }
-        public Type AssetType { get; private set; }
-        public string DefaultSelection { get; private set; }
+        public string DirectoryPath { get; }
+        public Type AssetType { get; }
+        public string DefaultSelection { get; }
     }
 
     public class SettingsContentHandler : IDisposable {
@@ -50,9 +50,9 @@ namespace Celeste.Mod.Procedurline {
                 Selection = Attribute.DefaultSelection;
             }
 
-            public EverestModule Module { get; private set; }
-            public PropertyInfo Property { get; private set; }
-            public WildcardContentAttribute Attribute { get; private set; }
+            public EverestModule Module { get; }
+            public PropertyInfo Property { get; }
+            public WildcardContentAttribute Attribute { get; }
             public string Selection {
                 get => selection;
                 set {

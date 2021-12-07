@@ -23,46 +23,37 @@ namespace Celeste.Mod.Procedurline {
     }
 
     public class HairOverride : IDisposable {
-        private static DynData<Player> dynPlayer = new DynData<Player>();
+        private static LinkedList<HairOverride> overrideStack = new LinkedList<HairOverride>();
+        private static On.Celeste.Player.hook_Update playerUpdateHook;
+        private static On.Celeste.Player.hook_UpdateHair playerHairUpdateHook;
+        private static On.Celeste.PlayerHair.hook_GetHairScale hairScaleHook;
+        private static List<ILHook> ilHooks = new List<ILHook>();
 
-        private On.Celeste.Player.hook_Update playerUpdateHook;
-        private On.Celeste.Player.hook_UpdateHair playerHairUpdateHook;
-        private On.Celeste.PlayerHair.hook_GetHairScale hairScaleHook;
-        private List<ILHook> ilHooks = new List<ILHook>();
+        internal static void Load() {
+            HairOverride DetermineOverride(PlayerHair hair) {
+                foreach(HairOverride o in overrideStack) {
+                    if(o.Selector(hair)) return o;
+                }
+                return null;
+            }
+            Color defaultNormalColor = Player.NormalHairColor, defaultTwoDashColor = Player.TwoDashesHairColor, defaultUsedColor = Player.UsedHairColor;
 
-        public HairOverride(HairColorData color, HairStyleData style, TargetSelector<PlayerHair> sel) {
             //Install hooks
             On.Celeste.Player.Update += (playerUpdateHook = (On.Celeste.Player.orig_Update orig, Player player) => {
+                HairOverride ov = DetermineOverride(player.Hair);
                 orig(player);
-                if(sel(player.Hair)) {
+                if(ov != null) {
                     //Update variables
-                    player.Hair.StepInFacingPerSegment *= style.StepMultiplier.X;
-                    player.Hair.StepYSinePerSegment *= style.StepMultiplier.Y;
-                    player.Hair.StepApproach *= style.GravityMultiplier;
-                }
-            });
-
-            On.Celeste.Player.UpdateHair += (playerHairUpdateHook = (On.Celeste.Player.orig_UpdateHair orig, Player player, bool gravity) => {
-                //TODO This is kinda a hack...
-                Color normalColor = Player.NormalHairColor, twoDashColor = Player.TwoDashesHairColor, usedColor = Player.UsedHairColor;
-                if(sel(player.Hair)) {
-                    dynPlayer.Set("NormalHairColor", color.NormalColor.RemoveAlpha());
-                    dynPlayer.Set("TwoDashesHairColor", color.TwoDashesColor.RemoveAlpha());
-                    dynPlayer.Set("UsedHairColor", color.UsedColor.RemoveAlpha());
-                }
-
-                orig(player, gravity);
-
-                if(sel(player.Hair)) {
-                    dynPlayer.Set("NormalHairColor", normalColor);
-                    dynPlayer.Set("TwoDashesHairColor", twoDashColor);
-                    dynPlayer.Set("UsedHairColor", usedColor);
+                    player.Hair.StepInFacingPerSegment *= ov.StyleData.StepMultiplier.X;
+                    player.Hair.StepYSinePerSegment *= ov.StyleData.StepMultiplier.Y;
+                    player.Hair.StepApproach *= ov.StyleData.GravityMultiplier;
                 }
             });
 
             On.Celeste.PlayerHair.GetHairScale += (hairScaleHook = (On.Celeste.PlayerHair.orig_GetHairScale orig, PlayerHair hair, int idx) => {
-                if(sel(hair) && idx < style.ScaleMultipliers.Length) {
-                    return orig(hair, idx) * style.ScaleMultipliers[idx];
+                HairOverride ov = DetermineOverride(hair);
+                if(ov != null && idx < ov.StyleData.ScaleMultipliers.Length) {
+                    return orig(hair, idx) * ov.StyleData.ScaleMultipliers[idx];
                 } else return orig(hair, idx);
             });
 
@@ -78,8 +69,9 @@ namespace Celeste.Mod.Procedurline {
                         cursor.Remove();
                         cursor.Emit(OpCodes.Ldarg_0);
                         cursor.EmitDelegate<Func<PlayerSprite, PlayerHair, int>>((sprite, hair) => {
-                            int numNodes = sel(hair) ? style.ScaleMultipliers.Length : sprite.HairCount;
+                            HairOverride ov = DetermineOverride(hair);
 
+                            int numNodes = ov?.StyleData.ScaleMultipliers.Length ?? sprite.HairCount;
                             if(!m.IsConstructor && hair.Nodes.Count != numNodes) {
                                 //Update nodes
                                 hair.Nodes.Clear();
@@ -92,9 +84,29 @@ namespace Celeste.Mod.Procedurline {
                     }
                 }));
             }
+
+            //Hook Player.UpdateHair
+            ilHooks.Add(new ILHook(typeof(Player).GetMethod(nameof(Player.UpdateHair), BindingFlags.Public | BindingFlags.Instance), ctx => {
+                void HookColorAccess(Func<HairOverride, Color> colCb, params string[] fields) {
+                    ILCursor cursor = new ILCursor(ctx);
+                    while(cursor.TryGotoNext(MoveType.After, instr => fields.Any(f => instr.MatchLdsfld<Player>(f)))) {
+                        cursor.Emit(OpCodes.Ldarg_0);
+                        cursor.EmitDelegate<Func<Color, Player, Color>>((origCol, player) => {
+                            HairOverride ov = DetermineOverride(player.Hair);
+                            if(ov != null) return colCb(ov);
+                            else return origCol;
+                        });
+                    }
+                }
+
+                //Hook all accesses to Player.*HairColor
+                HookColorAccess(ov => ov.ColorData.NormalColor.RemoveAlpha(), nameof(Player.NormalHairColor), nameof(Player.NormalBadelineHairColor));
+                HookColorAccess(ov => ov.ColorData.TwoDashesColor.RemoveAlpha(), nameof(Player.TwoDashesHairColor), nameof(Player.TwoDashesBadelineHairColor));
+                HookColorAccess(ov => ov.ColorData.UsedColor.RemoveAlpha(), nameof(Player.UsedHairColor), nameof(Player.UsedBadelineHairColor));
+            }));
         }
 
-        public void Dispose() {
+        internal static void Unload() {
             //Uninstall hooks
             if(playerUpdateHook != null) On.Celeste.Player.Update -= playerUpdateHook;
             playerUpdateHook = null;
@@ -108,5 +120,24 @@ namespace Celeste.Mod.Procedurline {
             foreach(ILHook h in ilHooks) h.Dispose();
             ilHooks.Clear();
         }
+
+        private LinkedListNode<HairOverride> node;
+
+        public HairOverride(HairColorData color, HairStyleData style, TargetSelector<PlayerHair> sel) {
+            ColorData = color;
+            StyleData = style;
+            Selector = sel;
+
+            node = overrideStack.AddFirst(this);
+        }
+
+        public void Dispose() {
+            if(node != null) overrideStack.Remove(node);
+            node = null;
+        }
+
+        public HairColorData ColorData { get; }
+        public HairStyleData StyleData { get; }
+        public TargetSelector<PlayerHair> Selector { get; }
     }
 }
