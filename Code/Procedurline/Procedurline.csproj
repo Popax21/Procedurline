@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net452</TargetFramework>
+    <LangVersion>8.0</LangVersion>
+    <Platforms>x86</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="FNA" HintPath="../../../../FNA.dll" />
+    <Reference Include="Celeste" HintPath="../../../../Celeste.exe" />
+    <Reference Include="MMHOOK_Celeste" HintPath="../../../../MMHOOK_Celeste.dll" />
+    <Reference Include="YamlDotNet" HintPath="../../../../YamlDotNet.dll" />
+    <Reference Include="Mono" HintPath="../../../../Mono.Cecil.dll" />
+    <Reference Include="MonoMod" HintPath="../../../../MonoMod.Utils.dll" />
+    <Reference Include="MonoMod" HintPath="../../../../MonoMod.RuntimeDetour.dll" />
+    <Reference Include="Celeste" HintPath="../../../../MonoMod.RuntimeDetour.dll" />
+  </ItemGroup>
+
+  <Target Name="CopyDLL" AfterTargets="Build">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="../.."/>
+  </Target>
+</Project>

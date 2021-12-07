@@ -1,0 +1,6 @@
+- Name: Procedurline
+  Version: 1.0.0
+  DLL: Procedurline.dll
+  Dependencies:
+    - Name: Everest
+      Version: 1.0.0
