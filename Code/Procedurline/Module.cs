@@ -6,20 +6,23 @@ using Celeste;
 using Monocle;
 
 namespace Celeste.Mod.Procedurline {
-    public class Procedurline : EverestModule {
-        public static Procedurline Instance { get; private set; }
+    public class ProcedurlineModule : EverestModule {
+        public static ProcedurlineModule Instance { get; private set; }
         public static string Name => Instance.Metadata.Name;
-        public Procedurline() { Instance = this; }
+        public ProcedurlineModule() { Instance = this; }
 
         private On.Monocle.Scene.hook_BeforeUpdate updateHook;
-        private LinkedList<(MTexture, TextureData)> textureUploadList = new LinkedList<(MTexture, TextureData)>();
+        private LinkedList<(VirtualTexture, TextureData)> textureUploadList = new LinkedList<(VirtualTexture, TextureData)>();
 
         private AnimationManager animationManager = null;
         private PlayerAnimationManager playerAnimationManager = null;
 
         public override void Load() {
             //Add hooks
-            On.Monocle.Scene.BeforeUpdate += updateHook = (orig, scene) => UploadTextures();
+            On.Monocle.Scene.BeforeUpdate += updateHook = (orig, scene) => {
+                UploadTextures();
+                orig(scene);
+            };
 
             //Load content
             HairOverride.Load();
@@ -72,17 +75,18 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
-        public static void UploadTexture(MTexture texture, TextureData data) {
-            if(texture.Texture.Texture_Safe == null) {
+        public static void UploadTexture(VirtualTexture texture, TextureData data) {
+            Texture2D tex = texture.Texture_Safe;
+            if(tex == null) {
                 //Queue for later upload
                 Instance.textureUploadList.AddLast((texture, data));
-            } else texture.Texture.Texture_Safe.SetData<Color>(data.Pixels);
+            } else tex.SetData<Color>(data.Pixels);
         }
 
         private void UploadTextures() {
             if(textureUploadList.Count > 0) {
-                LinkedList<(MTexture texture, TextureData data)> l = textureUploadList;
-                textureUploadList = new LinkedList<(MTexture, TextureData)>();
+                LinkedList<(VirtualTexture texture, TextureData data)> l = textureUploadList;
+                textureUploadList = new LinkedList<(VirtualTexture, TextureData)>();
                 foreach(var tex in l) UploadTexture(tex.texture, tex.data);
             }
         }

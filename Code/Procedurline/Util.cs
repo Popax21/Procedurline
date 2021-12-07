@@ -115,6 +115,12 @@ namespace Celeste.Mod.Procedurline {
 
         public static TextureData GetTextureData(this MTexture tex) => GetTextureData(tex.Texture).GetSubsection(tex.ClipRect);
         
+        public static MTexture CreateMTexture(this TextureData data, string name) {
+            VirtualTexture vTex = VirtualContent.CreateTexture(name, data.Width, data.Height, Color.White);
+            ProcedurlineModule.UploadTexture(vTex, data);
+            return new MTexture(vTex);
+        }
+
         public static List<List<Point>> GetColorComponents(this TextureData data) {
             List<List<Point>> comps = new List<List<Point>>();
             HashSet<Point> visited = new HashSet<Point>();
@@ -215,11 +221,8 @@ namespace Celeste.Mod.Procedurline {
                     frames[i] = heap.AddTexture(data);
                 }
             }
+            MTexture heapTex = heap.CreateHeapTexture().CreateMTexture($"filteredSprite<{sprite.GetHashCode()}:{(hueShift, intensityShift).GetHashCode()}>");
 
-            TextureData heapTexData = heap.CreateHeapTexture();
-            MTexture heapTex = new MTexture(VirtualContent.CreateTexture($"filteredSprite<{sprite.GetHashCode()}:{(hueShift, intensityShift).GetHashCode()}>", heapTexData.Width, heapTexData.Height, Color.White));
-            heapTex.Texture.Texture_Safe.SetData<Color>(heapTexData.Pixels);
-            
             //Create new sprite
             Sprite newSprite = new Sprite(null, null);
             sprite.CloneInto(newSprite);

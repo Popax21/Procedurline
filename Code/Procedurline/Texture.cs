@@ -163,7 +163,7 @@ namespace Celeste.Mod.Procedurline {
             while(true) {
                 //Try to allocate from root node
                 Node n = root.Allocate(texture);
-                if(n != null) return n.Rectangle;
+                if(n != null) return new Rectangle(n.Rectangle.X, n.Rectangle.Y, texture.Width, texture.Height);
 
                 //Double root node size
                 root = root.DoubleSize();

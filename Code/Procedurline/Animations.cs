@@ -140,9 +140,7 @@ namespace Celeste.Mod.Procedurline {
             }
 
             //Create heap texture
-            TextureData hTexData = heap.CreateHeapTexture();
-            MTexture hTex = new MTexture(VirtualContent.CreateTexture($"PCDLE@filterHeap<{sprite.GetHashCode()}:{animId}>", hTexData.Width, hTexData.Height, Color.White));
-            Procedurline.UploadTexture(hTex, hTexData);
+            MTexture hTex = heap.CreateHeapTexture().CreateMTexture($"PCDLE@filterHeap<{sprite.GetHashCode()}:{animId}>");
 
             //Create frame texture
             MTexture[] fTexs = new MTexture[animation.Frames.Length];
@@ -163,9 +161,9 @@ namespace Celeste.Mod.Procedurline {
 
         [Command("filterheaps", "Toggles if sprite filter heaps are drawn")]
         private static void DebugToggleFilterHeaps() {
-            if(Procedurline.AnimationManager == null) return;
-            Procedurline.AnimationManager.DebugFilterHeaps = !Procedurline.AnimationManager.DebugFilterHeaps;
-            Procedurline.AnimationManager.ClearFilterCache();
+            if(ProcedurlineModule.AnimationManager == null) return;
+            ProcedurlineModule.AnimationManager.DebugFilterHeaps = !ProcedurlineModule.AnimationManager.DebugFilterHeaps;
+            ProcedurlineModule.AnimationManager.ClearFilterCache();
         }
     }
 
