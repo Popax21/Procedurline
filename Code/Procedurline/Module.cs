@@ -43,7 +43,11 @@ namespace Celeste.Mod.Procedurline {
 
             //Load new player animations
             HashSet<string> loadedAnimations = new HashSet<string>();
-            SettingsContentHandler.LoadWildcardContent("Graphics/Atlases/Gameplay/Procedurline/Player/Animations", typeof(Texture2D), (ModAsset asset, string name) => {
+            ModAsset animDirAsset = Everest.Content.Get("Graphics/Atlases/Gameplay/Procedurline/Player/Animations", true);
+            if(animDirAsset != null) foreach(ModAsset asset in animDirAsset.Children) {
+                if(asset.Type != typeof(Texture2D)) continue;
+                string name = asset.PathVirtual.Substring(asset.PathVirtual.LastIndexOf('/')+1);
+
                 //Trim away number suffix from name
                 while(Char.IsNumber(name, name.Length-1)) name = name.Substring(0, name.Length-1);
                 
@@ -58,7 +62,7 @@ namespace Celeste.Mod.Procedurline {
 
                 //Add animation
                 playerAnimationManager.AddAnimation(default, name, path, 0.15f, new Monocle.Chooser<string>(name));
-            });
+            }
         }
 
         public static AnimationManager AnimationManager => Instance.animationManager;
