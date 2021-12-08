@@ -23,9 +23,17 @@ namespace Celeste.Mod.Procedurline {
 
                 //Add player animations
                 Dictionary<string, Sprite.Animation> anims = new DynData<PlayerSprite>(sprite).Get<Dictionary<string, Sprite.Animation>>("animations");
-                foreach(var anim in wildcardAnimations) anims.TryAdd(anim.Key, anim.Value);
+                foreach(var anim in wildcardAnimations) {
+                    if (!anims.ContainsKey(anim.Key)) {
+                        anims.Add(anim.Key, anim.Value);
+                    }
+                }
                 if(animations.TryGetValue(sprite.Mode, out var modeAnims)) {
-                    foreach(var anim in modeAnims) anims.TryAdd(anim.Key, anim.Value);
+                    foreach(var anim in modeAnims) {
+                        if (!anims.ContainsKey(anim.Key)) {
+                            anims.Add(anim.Key, anim.Value);
+                        }
+                    }
                 }
             });
 
@@ -50,7 +58,7 @@ namespace Celeste.Mod.Procedurline {
         public void AddAnimation(PlayerSpriteMode? mode, string id, string path, float delay, Chooser<string> into) {
             AddAnimation(mode, id, new Sprite.Animation() {
                 Frames = GFX.Game.GetAtlasSubtextures(path).ToArray(),
-                Delay = delay, 
+                Delay = delay,
                 Goto = into
             });
         }
@@ -85,7 +93,10 @@ namespace Celeste.Mod.Procedurline {
                     foreach(Component c in e.Components) {
                         if(!(c is PlayerSprite sprite)) continue;
                         if(mode.HasValue && sprite.Mode != mode.Value) continue;
-                        new DynData<PlayerSprite>(sprite).Get<Dictionary<string, Sprite.Animation>>("animations").TryAdd(id, anim);
+                        var dict = new DynData<PlayerSprite>(sprite).Get<Dictionary<string, Sprite.Animation>>("animations");
+                        if (!dict.ContainsKey(id)) {
+                            dict.Add(id, anim);
+                        }
                     }
                 }
             }

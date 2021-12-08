@@ -11,7 +11,7 @@ namespace Celeste.Mod.Procedurline {
     public abstract class CustomRefill : Refill {
         private static readonly Color ONCE_COLOR = Calc.HexToColor("#93bd40");
         private static readonly Color DOUBLE_COLOR = Calc.HexToColor("#e268d1");
-        private static readonly Dictionary<(Color, bool), Sprite> RECOLORED_SPRITES = new Dictionary<(Color, bool), Sprite>();
+        private static readonly Dictionary<Tuple<Color, bool>, Sprite> RECOLORED_SPRITES = new Dictionary<Tuple<Color, bool>, Sprite>();
 
         private static readonly FieldInfo SHATTER_PARTICLE_FIELD = typeof(Refill).GetField("p_shatter", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo REGEN_PARTICLE_FIELD = typeof(Refill).GetField("p_regen", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -31,7 +31,7 @@ namespace Celeste.Mod.Procedurline {
 
             //Recolor sprite
             Sprite sprite = Components.Get<Sprite>();
-            if(!RECOLORED_SPRITES.TryGetValue((color, doubleRefill), out Sprite recSprite)) RECOLORED_SPRITES[(color, doubleRefill)] = recSprite = sprite.ShiftColor(hueShift, intensityShift);
+            if(!RECOLORED_SPRITES.TryGetValue(new Tuple<Color, bool>(color, doubleRefill), out Sprite recSprite)) RECOLORED_SPRITES[new Tuple<Color, bool>(color, doubleRefill)] = recSprite = sprite.ShiftColor(hueShift, intensityShift);
             recSprite.CloneInto(sprite);
 
             //Recolor particels
@@ -42,7 +42,7 @@ namespace Celeste.Mod.Procedurline {
             //Change player collide callaback
             Components.Get<PlayerCollider>().OnCollide = OnPlayerCollision;
         }
-    
+
         private void OnPlayerCollision(Player player) {
             if(!Broken && OnTouch(player)) {
                 Broken = true;
