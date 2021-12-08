@@ -36,7 +36,7 @@ namespace Celeste.Mod.Procedurline {
             //Add hooks for animation dict accesses
             foreach(MethodInfo m in typeof(Sprite).GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)) {
                 if(m.DeclaringType != typeof(Sprite)) continue;
-                
+
                 ilHooks.Add(new ILHook(m, ctx => {
                     //Replace all get accesses
                     {
@@ -49,7 +49,7 @@ namespace Celeste.Mod.Procedurline {
                                 //Check if the filtered version is in the sprite cache
                                 DynData<Sprite> dynSprite = new DynData<Sprite>(sprite);
                                 Dictionary<string, Sprite.Animation> cachedAnims = dynSprite.Get<Dictionary<string, Sprite.Animation>>("cachedAnimations");
-                                if(cachedAnims?.TryGetValue(animId, out Sprite.Animation cachedAnim) ?? false) return cachedAnim ?? dict[animId];
+                                if(cachedAnims != null && cachedAnims.TryGetValue(animId, out Sprite.Animation cachedAnim)) return cachedAnim ?? dict[animId];
 
                                 //Filter animation
                                 Sprite.Animation anim = dict[animId];
@@ -81,7 +81,7 @@ namespace Celeste.Mod.Procedurline {
             filters.Remove(filter);
             if(clearCache) ClearFilterCache();
         }
-        
+
         public void ClearFilterCache(string animId = null) {
             //Reset sprites
             if(Engine.Scene == null) return;
@@ -129,7 +129,7 @@ namespace Celeste.Mod.Procedurline {
 
                 //Get texture data
                 TextureData texData = oTex.GetTextureData();
-                
+
                 //Apply filters
                 foreach(AnimationFilter filter in filters) {
                     if(filter.TargetSelector(sprite)) texData = filter.Apply(sprite, animId, i, texData);

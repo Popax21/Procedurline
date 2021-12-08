@@ -70,9 +70,9 @@ namespace Celeste.Mod.Procedurline {
         public static bool IsApproximately(this Color color, params Color[] others) {
             foreach(Color other in others) {
                 if(
-                    Math.Abs(color.R - other.R) <= FUZZINESS && 
-                    Math.Abs(color.B - other.B) <= FUZZINESS && 
-                    Math.Abs(color.G - other.G) <= FUZZINESS && 
+                    Math.Abs(color.R - other.R) <= FUZZINESS &&
+                    Math.Abs(color.B - other.B) <= FUZZINESS &&
+                    Math.Abs(color.G - other.G) <= FUZZINESS &&
                     Math.Abs(color.A - other.A) <= FUZZINESS
                 ) return true;
             }
@@ -104,7 +104,7 @@ namespace Celeste.Mod.Procedurline {
 
     public static class TextureHelper {
         private static readonly Dictionary<VirtualTexture, TextureData> TEX_DATA_CACHE = new Dictionary<VirtualTexture, TextureData>();
-        
+
         public static TextureData GetTextureData(this VirtualTexture tex) {
             if(!TEX_DATA_CACHE.TryGetValue(tex, out TextureData data)) {
                 TEX_DATA_CACHE[tex] = data = new TextureData(tex.Width, tex.Height);
@@ -114,7 +114,7 @@ namespace Celeste.Mod.Procedurline {
         }
 
         public static TextureData GetTextureData(this MTexture tex) => GetTextureData(tex.Texture).GetSubsection(tex.ClipRect);
-        
+
         public static MTexture CreateMTexture(this TextureData data, string name) {
             VirtualTexture vTex = VirtualContent.CreateTexture(name, data.Width, data.Height, Color.White);
             ProcedurlineModule.UploadTexture(vTex, data);
@@ -124,7 +124,7 @@ namespace Celeste.Mod.Procedurline {
         public static List<List<Point>> GetColorComponents(this TextureData data) {
             List<List<Point>> comps = new List<List<Point>>();
             HashSet<Point> visited = new HashSet<Point>();
-            
+
             //Perform a DFS from every pixel
             foreach(Point p in data) {
                 if(!visited.Contains(p)) {
@@ -160,7 +160,7 @@ namespace Celeste.Mod.Procedurline {
 
         public static bool AreComponentsTouching(List<Point> compA, List<Point> compB) {
             if(compA.Count <= 0 || compB.Count <= 0) return false;
-            
+
             //Iterate over all points in component A
             foreach(Point p in compA) {
                 //Is a neighbouring point in component B?
@@ -174,9 +174,9 @@ namespace Celeste.Mod.Procedurline {
 
         public static List<List<Point>> JoinComponents(List<List<Point>> comps, Func<List<Point>, List<Point>, bool> shouldJoin) {
             //Create initial merge components
-            List<(bool, List<Point>)> mergeComps = new List<(bool, List<Point>)>();
-            mergeComps.AddRange(comps.Select(i => (false, i)));
-            
+            List<Tuple<bool, List<Point>>> mergeComps = new List<Tuple<bool, List<Point>>>();
+            mergeComps.AddRange(comps.Select(i => new Tuple<bool, List<Point>>(false, i)));
+
             //Do merge rounds
             bool didMerge;
             do {
@@ -192,7 +192,7 @@ namespace Celeste.Mod.Procedurline {
                         if(AreComponentsTouching(mergeComps[i].Item2, mergeComps[j].Item2) && shouldJoin(mergeComps[i].Item2, mergeComps[j].Item2)) {
                             //Merge components
                             mergeComps[i].Item2.AddRange(mergeComps[j].Item2);
-                            mergeComps[j] = (true, default);
+                            mergeComps[j] = new Tuple<bool, List<Point>>(true, default);
                             didMerge = true;
                         }
                     }
@@ -207,7 +207,7 @@ namespace Celeste.Mod.Procedurline {
     public static class SpriteHelper {
         private static readonly Func<Sprite, Sprite, Sprite> CLONEINTO_DELEG = (Func<Sprite, Sprite, Sprite>) typeof(Sprite).GetMethod("CloneInto", BindingFlags.NonPublic | BindingFlags.Instance).CreateDelegate(typeof(Func<Sprite, Sprite, Sprite>));
         public static Sprite CloneInto(this Sprite sprite, Sprite clone) => CLONEINTO_DELEG(sprite, clone);
-        
+
         public static Sprite ShiftColor(this Sprite sprite, Matrix hueShift, float intensityShift, bool ignoreWhiteBlack=true) {
             //Filter animation frames
             TextureHeap heap = new TextureHeap();
@@ -221,7 +221,7 @@ namespace Celeste.Mod.Procedurline {
                     frames[i] = heap.AddTexture(data);
                 }
             }
-            MTexture heapTex = heap.CreateHeapTexture().CreateMTexture($"filteredSprite<{sprite.GetHashCode()}:{(hueShift, intensityShift).GetHashCode()}>");
+            MTexture heapTex = heap.CreateHeapTexture().CreateMTexture($"filteredSprite<{sprite.GetHashCode()}:{new Tuple<Matrix, float>(hueShift, intensityShift).GetHashCode()}>");
 
             //Create new sprite
             Sprite newSprite = new Sprite(null, null);
@@ -256,6 +256,6 @@ namespace Celeste.Mod.Procedurline {
             }
 
             return new AreaKey() { SID = sid, Mode = mode };
-        } 
+        }
     }
 }

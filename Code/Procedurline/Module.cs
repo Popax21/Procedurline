@@ -12,7 +12,7 @@ namespace Celeste.Mod.Procedurline {
         public ProcedurlineModule() { Instance = this; }
 
         private On.Monocle.Scene.hook_BeforeUpdate updateHook;
-        private LinkedList<(VirtualTexture, TextureData)> textureUploadList = new LinkedList<(VirtualTexture, TextureData)>();
+        private LinkedList<Tuple<VirtualTexture, TextureData>> textureUploadList = new LinkedList<Tuple<VirtualTexture, TextureData>>();
 
         private AnimationManager animationManager = null;
         private PlayerAnimationManager playerAnimationManager = null;
@@ -37,7 +37,7 @@ namespace Celeste.Mod.Procedurline {
             //Unload content
             HairOverride.Unload();
             CustomBooster.Unload();
-            
+
             //Destroy the animation managers
             if(animationManager != null) animationManager.Dispose();
             animationManager = null;
@@ -60,7 +60,7 @@ namespace Celeste.Mod.Procedurline {
 
                 //Trim away number suffix from name
                 while(Char.IsNumber(name, name.Length-1)) name = name.Substring(0, name.Length-1);
-                
+
                 //Trim away atlas prefix and number suffix from path
                 string path = asset.PathVirtual;
                 while(Char.IsNumber(path, path.Length-1)) path = path.Substring(0, path.Length-1);
@@ -79,15 +79,15 @@ namespace Celeste.Mod.Procedurline {
             Texture2D tex = texture.Texture_Safe;
             if(tex == null) {
                 //Queue for later upload
-                Instance.textureUploadList.AddLast((texture, data));
+                Instance.textureUploadList.AddLast(new Tuple<VirtualTexture, TextureData>(texture, data));
             } else tex.SetData<Color>(data.Pixels);
         }
 
         private void UploadTextures() {
             if(textureUploadList.Count > 0) {
-                LinkedList<(VirtualTexture texture, TextureData data)> l = textureUploadList;
-                textureUploadList = new LinkedList<(VirtualTexture, TextureData)>();
-                foreach(var tex in l) UploadTexture(tex.texture, tex.data);
+                LinkedList<Tuple<VirtualTexture, TextureData>> l = textureUploadList;
+                textureUploadList = new LinkedList<Tuple<VirtualTexture, TextureData>>();
+                foreach(var tex in l) UploadTexture(tex.Item1, tex.Item2);
             }
         }
 
