@@ -208,6 +208,12 @@ namespace Celeste.Mod.Procedurline {
         private static readonly Func<Sprite, Sprite, Sprite> CLONEINTO_DELEG = (Func<Sprite, Sprite, Sprite>) typeof(Sprite).GetMethod("CloneInto", BindingFlags.NonPublic | BindingFlags.Instance).CreateDelegate(typeof(Func<Sprite, Sprite, Sprite>));
         public static Sprite CloneInto(this Sprite sprite, Sprite clone) => CLONEINTO_DELEG(sprite, clone);
 
+        public static Sprite Clone(this Sprite sprite) {
+            Sprite clone = new Sprite(null, sprite.Path);
+            sprite.CloneInto(clone);
+            return clone;
+        }
+
         public static Sprite ShiftColor(this Sprite sprite, Matrix hueShift, float intensityShift, bool ignoreWhiteBlack=true) {
             //Filter animation frames
             TextureHeap heap = new TextureHeap();

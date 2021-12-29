@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Collections.Generic;
-using Celeste.Mod.Entities;
 using Microsoft.Xna.Framework;
 using Monocle;
 
@@ -12,8 +11,8 @@ namespace Celeste.Mod.Procedurline {
 
         private static readonly Color ORIG_COLOR = Calc.HexToColor("9c1105");
         private static readonly Dictionary<Color, Sprite> RECOLORED_SPRITES = new Dictionary<Color, Sprite>();
+        private static readonly FieldInfo SPRITE_FIELD = typeof(Booster).GetField("sprite", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo PARTICLE_TYPE_FIELD = typeof(Booster).GetField("particleType", BindingFlags.NonPublic | BindingFlags.Instance);
-
         private static readonly FieldInfo RESPAWN_TIMER_FIELD = typeof(Booster).GetField("respawnTimer", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo CANNOT_USE_TIMER = typeof(Booster).GetField("cannotUseTimer", BindingFlags.NonPublic | BindingFlags.Instance);
 
@@ -34,7 +33,9 @@ namespace Celeste.Mod.Procedurline {
             //Recolor the sprite
             Sprite sprite = Components.Get<Sprite>();
             if(!RECOLORED_SPRITES.TryGetValue(color, out Sprite recSprite)) RECOLORED_SPRITES[color] = recSprite = sprite.ShiftColor(hueShift, intensityShift);
-            recSprite.CloneInto(sprite);
+            Remove(sprite);
+            Add(sprite = recSprite.Clone());
+            SPRITE_FIELD.SetValue(this, sprite);
 
             //Recolor particles
             AppearParticles = P_RedAppear.ShiftColor(hueShift, intensityShift);

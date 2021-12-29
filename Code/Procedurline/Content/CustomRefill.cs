@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Reflection;
 using System.Collections;
 using System.Collections.Generic;
@@ -12,6 +11,7 @@ namespace Celeste.Mod.Procedurline {
         private static readonly Color ONCE_COLOR = Calc.HexToColor("#93bd40");
         private static readonly Color DOUBLE_COLOR = Calc.HexToColor("#e268d1");
         private static readonly Dictionary<Tuple<Color, bool>, Sprite> RECOLORED_SPRITES = new Dictionary<Tuple<Color, bool>, Sprite>();
+        private static readonly FieldInfo SPRITE_FIELD = typeof(Refill).GetField("sprite", BindingFlags.NonPublic | BindingFlags.Instance);
 
         private static readonly FieldInfo SHATTER_PARTICLE_FIELD = typeof(Refill).GetField("p_shatter", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo REGEN_PARTICLE_FIELD = typeof(Refill).GetField("p_regen", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -32,7 +32,9 @@ namespace Celeste.Mod.Procedurline {
             //Recolor sprite
             Sprite sprite = Components.Get<Sprite>();
             if(!RECOLORED_SPRITES.TryGetValue(new Tuple<Color, bool>(color, doubleRefill), out Sprite recSprite)) RECOLORED_SPRITES[new Tuple<Color, bool>(color, doubleRefill)] = recSprite = sprite.ShiftColor(hueShift, intensityShift);
-            recSprite.CloneInto(sprite);
+            Remove(sprite);
+            Add(sprite = recSprite.Clone());
+            SPRITE_FIELD.SetValue(this, sprite);
 
             //Recolor particels
             SHATTER_PARTICLE_FIELD.SetValue(this, ShatterParticles = ((ParticleType) SHATTER_PARTICLE_FIELD.GetValue(this)).ShiftColor(hueShift, intensityShift));
