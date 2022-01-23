@@ -64,19 +64,17 @@ namespace Celeste.Mod.Procedurline {
                 ilHooks.Add(new ILHook(m, ctx => {
                     //Hook all accesses to PlayerSprite.HairCount
                     ILCursor cursor = new ILCursor(ctx);
-                    while(cursor.TryGotoNext(MoveType.Before, instr => instr.MatchLdfld(typeof(PlayerSprite).GetField(nameof(PlayerSprite.HairCount))))) {
+                    while(cursor.TryGotoNext(MoveType.After, instr => instr.MatchLdfld(typeof(PlayerSprite).GetField(nameof(PlayerSprite.HairCount))))) {
                         //Replace with delegate
-                        cursor.Remove();
                         cursor.Emit(OpCodes.Ldarg_0);
-                        cursor.EmitDelegate<Func<PlayerSprite, PlayerHair, int>>((sprite, hair) => {
+                        cursor.EmitDelegate<Func<int, PlayerHair, int>>((origCount, hair) => {
                             HairOverride ov = DetermineOverride(hair);
 
-                            int numNodes = ov?.StyleData.ScaleMultipliers.Length ?? sprite.HairCount;
+                            int numNodes = ov?.StyleData.ScaleMultipliers.Length ?? origCount;
                             if(!m.IsConstructor && hair.Nodes.Count != numNodes) {
                                 //Update nodes
-                                hair.Nodes.Clear();
-                                for(int i = 0; i < numNodes; i++) hair.Nodes.Add(Vector2.Zero);
-                                hair.Start();
+                                while(hair.Nodes.Count > numNodes) hair.Nodes.RemoveAt(hair.Nodes.Count);
+                                while(hair.Nodes.Count < numNodes) hair.Nodes.Add(hair.Nodes[hair.Nodes.Count-1]);
                             }
 
                             return numNodes;
