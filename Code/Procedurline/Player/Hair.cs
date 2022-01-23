@@ -73,8 +73,8 @@ namespace Celeste.Mod.Procedurline {
                             int numNodes = ov?.StyleData.ScaleMultipliers.Length ?? origCount;
                             if(!m.IsConstructor && hair.Nodes.Count != numNodes) {
                                 //Update nodes
-                                while(hair.Nodes.Count > numNodes) hair.Nodes.RemoveAt(hair.Nodes.Count);
-                                while(hair.Nodes.Count < numNodes) hair.Nodes.Add(hair.Nodes[hair.Nodes.Count-1]);
+                                while(hair.Nodes.Count > numNodes) hair.Nodes.RemoveAt(hair.Nodes.Count-1);
+                                while(hair.Nodes.Count < numNodes) hair.Nodes.Add((hair.Nodes.Count > 0) ? hair.Nodes[hair.Nodes.Count-1] : Vector2.Zero);
                             }
 
                             return numNodes;
