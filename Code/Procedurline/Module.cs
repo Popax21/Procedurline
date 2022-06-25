@@ -1,97 +1,118 @@
 ﻿using System;
+using System.Reflection;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics;
-using Celeste;
+
+using MonoMod.Cil;
+using MonoMod.RuntimeDetour;
 using Monocle;
 
 namespace Celeste.Mod.Procedurline {
-    public class ProcedurlineModule : EverestModule {
+    public sealed class ProcedurlineModule : EverestModule {
         public static ProcedurlineModule Instance { get; private set; }
         public static string Name => Instance.Metadata.Name;
         public ProcedurlineModule() { Instance = this; }
 
-        private On.Monocle.Scene.hook_BeforeUpdate updateHook;
-        private LinkedList<Tuple<VirtualTexture, TextureData>> textureUploadList = new LinkedList<Tuple<VirtualTexture, TextureData>>();
+        public override Type SettingsType => typeof(ProcedurlineSettings);
+        public static ProcedurlineSettings Settings => (ProcedurlineSettings) Instance?._Settings;
 
-        private AnimationManager animationManager = null;
-        private PlayerAnimationManager playerAnimationManager = null;
+        private GlobalManager globalManager;
+        private TextureManager texManager;
+        private SpriteManager spriteManager;
+        private PlayerManager playerManager;
+
+        private DataScope globalScope, sceneScope, levelScope, staticScope, playerScope;
+
+        private List<IDetour> contentHooks = new List<IDetour>();
 
         public override void Load() {
-            //Add hooks
-            On.Monocle.Scene.BeforeUpdate += updateHook = (orig, scene) => {
-                UploadTextures();
-                orig(scene);
-            };
+            //Create components
+            globalManager = new GlobalManager(Celeste.Instance);
+            texManager = new TextureManager(Celeste.Instance);
+            spriteManager = new SpriteManager(Celeste.Instance);
+            playerManager = new PlayerManager(Celeste.Instance);
 
-            //Load content
-            HairOverride.Load();
-            CustomBooster.Load();
+            //Create default scopes
+            globalScope = new DataScope("$GLOBAL");
+            sceneScope = new DataScope("$SCENE");
+            levelScope = new DataScope("$LEVEL");
+            staticScope = new DataScope("$STATIC");
+            playerScope = new DataScope("$PLAYER");
+
+            //Apply content hooks and patches
+            foreach(Type type in typeof(ProcedurlineModule).Assembly.GetTypes()) {
+                foreach(MethodInfo method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static)) {
+                    if(method.IsStatic) {
+                        if(method.GetCustomAttribute(typeof(ContentHookAttribute)) is ContentHookAttribute hookAttr) {
+                            contentHooks.Add(new Hook(type.GetMethod(hookAttr.HookTargetName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.FlattenHierarchy), method));
+                        }
+
+                        if(method.GetCustomAttribute(typeof(ContentILHookAttribute)) is ContentILHookAttribute ilHookAttr) {
+                            contentHooks.Add(new ILHook(type.GetMethod(ilHookAttr.HookTargetName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.FlattenHierarchy), (ILContext.Manipulator) method.CreateDelegate(typeof(ILContext.Manipulator))));
+                        }
+                    } else {
+                        if(method.GetCustomAttribute(typeof(ContentVirtualizeAttribute)) is ContentVirtualizeAttribute) {
+                            PatchUtils.Virtualize(method, contentHooks);
+                        }
+                    }
+                }
+            }
         }
 
         public override void Unload() {
-            //Remove hooks
-            if(updateHook != null) On.Monocle.Scene.BeforeUpdate -= updateHook;
-            updateHook = null;
+            //Dispose content patches
+            foreach(IDetour hook in contentHooks) hook.Dispose();
+            contentHooks.Clear();
 
-            //Unload content
-            HairOverride.Unload();
-            CustomBooster.Unload();
+            //Dispose default scopes
+            globalScope?.Dispose();
+            sceneScope?.Dispose();
+            levelScope?.Dispose();
+            playerScope?.Dispose();
 
-            //Destroy the animation managers
-            if(animationManager != null) animationManager.Dispose();
-            animationManager = null;
-
-            if(playerAnimationManager != null) playerAnimationManager.Dispose();
-            playerAnimationManager = null;
+            //Dispose components
+            playerManager?.Dispose();
+            spriteManager?.Dispose();
+            texManager?.Dispose();
+            globalManager?.Dispose();
         }
 
         public override void LoadContent(bool firstLoad) {
-            //Create the animation managers
-            animationManager = new AnimationManager();
-            playerAnimationManager = new PlayerAnimationManager();
+            if(firstLoad) {
+                //Create the empty texture
+                TextureManager.EmptyTexture = new TextureHandle("EMPTY", TextureManager.GlobalScope, 1, 1, Color.Transparent);
 
-            //Load new player animations
-            HashSet<string> loadedAnimations = new HashSet<string>();
-            ModAsset animDirAsset = Everest.Content.Get("Graphics/Atlases/Gameplay/Procedurline/Player/Animations", true);
-            if(animDirAsset != null) foreach(ModAsset asset in animDirAsset.Children) {
-                if(asset.Type != typeof(Texture2D)) continue;
-                string name = asset.PathVirtual.Substring(asset.PathVirtual.LastIndexOf('/')+1);
+                //Create the error texture
+                TextureHandle errTex = TextureManager.ErrorTexture = new TextureHandle("ERROR", TextureManager.GlobalScope, 2, 2, Color.Transparent);
 
-                //Trim away number suffix from name
-                while(Char.IsNumber(name, name.Length-1)) name = name.Substring(0, name.Length-1);
-
-                //Trim away atlas prefix and number suffix from path
-                string path = asset.PathVirtual;
-                while(Char.IsNumber(path, path.Length-1)) path = path.Substring(0, path.Length-1);
-                path = path.Substring(GFX.Game.DataPath.Length + (GFX.Game.DataPath[GFX.Game.DataPath.Length-1] == '/' ? 0 : 1));
-
-                //If we already loaded an animation with this path, skip it
-                if(loadedAnimations.Contains(path)) return;
-                loadedAnimations.Add(path);
-
-                //Add animation
-                playerAnimationManager.AddAnimation(default, name, path, 0.15f, new Monocle.Chooser<string>(name));
+                TextureData errorData = new TextureData(2, 2);
+                errorData[0,0] = errorData[1,1] = Color.Magenta;
+                errorData[1,0] = errorData[0,1] = Color.Black;
+                TextureManager.ErrorTexture.SetTextureData(errorData).ContinueWith(_ => errorData.Dispose());
             }
         }
+        
+        public static GlobalManager GlobalManager => Instance?.globalManager;
+        public static TextureManager TextureManager => Instance?.texManager;
+        public static SpriteManager SpriteManager => Instance?.spriteManager;
+        public static PlayerManager PlayerManager => Instance?.playerManager;
 
-        public static void UploadTexture(VirtualTexture texture, TextureData data) {
-            Texture2D tex = texture.Texture_Safe;
-            if(tex == null) {
-                //Queue for later upload
-                Instance.textureUploadList.AddLast(new Tuple<VirtualTexture, TextureData>(texture, data));
-            } else tex.SetData<Color>(data.Pixels);
-        }
+        public static DataScope GlobalScope => Instance?.globalScope;
+        public static DataScope SceneScope => Instance?.sceneScope;
+        public static DataScope LevelScope => Instance?.levelScope;
+        public static DataScope StaticScope => Instance?.staticScope;
+        public static DataScope PlayerScope => Instance?.playerScope;
 
-        private void UploadTextures() {
-            if(textureUploadList.Count > 0) {
-                LinkedList<Tuple<VirtualTexture, TextureData>> l = textureUploadList;
-                textureUploadList = new LinkedList<Tuple<VirtualTexture, TextureData>>();
-                foreach(var tex in l) UploadTexture(tex.Item1, tex.Item2);
+        [Command("pl_invlscope", "Invalidates the specified Procedurline data scope (default: $GLOBAL)")]
+        private static void INVLGLBL(string scope) {
+            switch(scope?.ToUpper() ?? "$GLOBAL") {
+                case "$GLOBAL": GlobalScope?.Invalidate(); break;
+                case "$SCENE": SceneScope?.Invalidate(); break;
+                case "$LEVEL": LevelScope?.Invalidate(); break;
+                case "$STATIC": StaticScope?.Invalidate(); break;
+                case "$PLAYER": PlayerScope?.Invalidate(); break;
+                default: Celeste.Commands.Log("Unknown scope!"); break;
             }
         }
-
-        public static AnimationManager AnimationManager => Instance.animationManager;
-        public static PlayerAnimationManager PlayerAnimationManager => Instance.playerAnimationManager;
     }
 }

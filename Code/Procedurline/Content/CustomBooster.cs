@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
+
 using Monocle;
 
 namespace Celeste.Mod.Procedurline {
@@ -9,47 +10,55 @@ namespace Celeste.Mod.Procedurline {
             GREEN_BOOST, RED_BOOST
         }
 
-        private static readonly Color ORIG_COLOR = Calc.HexToColor("9c1105");
-        private static readonly Dictionary<Color, Sprite> RECOLORED_SPRITES = new Dictionary<Color, Sprite>();
-        private static readonly FieldInfo SPRITE_FIELD = typeof(Booster).GetField("sprite", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static readonly FieldInfo PARTICLE_TYPE_FIELD = typeof(Booster).GetField("particleType", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static readonly FieldInfo RESPAWN_TIMER_FIELD = typeof(Booster).GetField("respawnTimer", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static readonly FieldInfo CANNOT_USE_TIMER = typeof(Booster).GetField("cannotUseTimer", BindingFlags.NonPublic | BindingFlags.Instance);
+        public static readonly Color GreenColor = Calc.HexToColor("#0e4a36");
+        public static readonly Color RedColor = Calc.HexToColor("#9c1105");
 
-        internal static void Load() => On.Celeste.Booster.AppearParticles += AppearParticlesHook;
-        internal static void Unload() => On.Celeste.Booster.AppearParticles -= AppearParticlesHook;
+        private static readonly Dictionary<Color, Sprite> RECOLORED_SPRITES = new Dictionary<Color, Sprite>();
+        private static readonly FieldInfo Booster_sprite = typeof(Booster).GetField("sprite", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo Booster_particleType = typeof(Booster).GetField("particleType", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo Booster_respawnTimer = typeof(Booster).GetField("respawnTimer", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo Booster_cannotUseTimer = typeof(Booster).GetField("cannotUseTimer", BindingFlags.NonPublic | BindingFlags.Instance);
+
+        [ContentHook("AppearParticles")]
         private static void AppearParticlesHook(On.Celeste.Booster.orig_AppearParticles orig, Booster booster) {
             if(booster is CustomBooster cBooster) {
+                //Modified vanilla code which uses custom particle types
                 ParticleSystem particlesBG = cBooster.SceneAs<Level>()?.ParticlesBG;
                 if(particlesBG == null) return;
                 for(int i = 0; i < 360; i += 30) particlesBG.Emit(cBooster.AppearParticles, 1, cBooster.Center, Vector2.One * 2f, i * Calc.DegToRad);
             } else orig(booster);
         }
-        
-        public CustomBooster(Vector2 pos, Color color) : base(pos, true) {
-            Matrix hueShift = ColorHelper.CalculateHueShiftMatrix(color.GetHue() - ORIG_COLOR.GetHue());
-            float intensityShift = (float) (color.R+color.G+color.B) / (ORIG_COLOR.R+ORIG_COLOR.G+ORIG_COLOR.B);
 
-            //Recolor the sprite
+        public readonly Color Color;
+        public readonly Sprite Sprite;
+        public readonly ParticleType AppearParticles;
+        public readonly ParticleType BurstParticles;
+
+        public CustomBooster(Vector2 pos, Color color) : base(pos, true) {
+            Color = color;
+
+            Matrix colMat = ColorUtils.CalculateRecolorMatrix(RedColor, color);
+
+            //Process sprite
             Sprite sprite = Components.Get<Sprite>();
-            if(!RECOLORED_SPRITES.TryGetValue(color, out Sprite recSprite)) RECOLORED_SPRITES[color] = recSprite = sprite.ShiftColor(hueShift, intensityShift);
             Remove(sprite);
-            Add(sprite = recSprite.Clone());
-            SPRITE_FIELD.SetValue(this, sprite);
+            Add(Sprite = ProcessSprite(sprite));
+            Booster_sprite.SetValue(this, Sprite);
 
             //Recolor particles
-            AppearParticles = P_RedAppear.ShiftColor(hueShift, intensityShift);
-            PARTICLE_TYPE_FIELD.SetValue(this, BurstParticles = P_BurstRed.ShiftColor(hueShift, intensityShift));
+            AppearParticles = P_RedAppear.ApplyMatrix(colMat);
+            Booster_particleType.SetValue(this, BurstParticles = P_BurstRed.ApplyMatrix(colMat, 0.05f, 0.05f));
 
             //Change player collide callaback
             Components.Get<PlayerCollider>().OnCollide = OnPlayerCollision;
         }
 
         private void OnPlayerCollision(Player player) {
-            if ((float) RESPAWN_TIMER_FIELD.GetValue(this) <= 0f && (float) CANNOT_USE_TIMER.GetValue(this) <= 0f && !BoostingPlayer) {
-                BoostType? boostType = OnBoost(player);
+            //Modified version of the vanilla code
+            if((float) Booster_respawnTimer.GetValue(this) <= 0f && (float) Booster_cannotUseTimer.GetValue(this) <= 0f && !BoostingPlayer) {
+                BoostType? boostType = OnPlayerEnter(player);
                 if(boostType == null) return;
-                CANNOT_USE_TIMER.SetValue(this, 0.45f);
+                Booster_cannotUseTimer.SetValue(this, 0.45f);
 
                 if(boostType == BoostType.GREEN_BOOST) player.Boost(this);
                 else player.RedBoost(this);
@@ -61,10 +70,27 @@ namespace Celeste.Mod.Procedurline {
                 sprite.FlipX = (player.Facing == Facings.Left);
             }
         }
-        
-        protected abstract BoostType? OnBoost(Player player);
 
-        public ParticleType AppearParticles { get; }
-        public ParticleType BurstParticles { get; }
+        /// <summary>
+        /// Processes the booster's sprite. By default this recolors it using the color passed to the constructor
+        /// The default implementation caches sprites based on color, custom implementations should implement a cache themselves
+        /// </summary>
+        protected virtual Sprite ProcessSprite(Sprite origSprite) {
+            if(!RECOLORED_SPRITES.TryGetValue(Color, out Sprite recSprite)) {
+                Matrix colMat = ColorUtils.CalculateRecolorMatrix(RedColor, Color);
+                RECOLORED_SPRITES[Color] = recSprite = new StaticSprite($"customBooster-#{Color.PackedValue:x8}", Sprite, new SpriteColorMatrixProcessor(colMat, 0.05f, 0.05f));
+            }
+            return recSprite.Clone();
+        }
+
+        /// <summary>
+        /// Called when the player enters your booster. Return the type of boost it should give them, or <c>null</c> if no default behaviour should take place.
+        /// </summary>
+        protected abstract BoostType? OnPlayerEnter(Player player);
+
+        [ContentVirtualize] protected virtual new void Appear() {}
+        [ContentVirtualize] protected virtual new void PlayerBoosted(Player player, Vector2 dir) {}
+        [ContentVirtualize] protected virtual new void PlayerReleased() {}
+        [ContentVirtualize] protected virtual new void PlayerDied() {}
     }
 }

@@ -1,43 +1,48 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net452</TargetFramework>
-    <LangVersion>8.0</LangVersion>
-    <CelesteGamePath Condition="'$(CELESTEGAMEPATH)' == ''">..\..\..\..</CelesteGamePath>
-  </PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>net452</TargetFramework>
+        <LangVersion>10.0</LangVersion>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <NoWarn>1591;1573</NoWarn>
 
-  <ItemDefinitionGroup>
-    <PackageReference PrivateAssets="all" ExcludeAssets="runtime" />
-    <Reference Private="false" />
-  </ItemDefinitionGroup>
+        <CelesteGamePath Condition="'$(CELESTEGAMEPATH)' == ''">..\..\..\..</CelesteGamePath>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="MonoMod" Version="21.08.19.01" />
-    <PackageReference Include="MonoMod.RuntimeDetour" Version="21.08.19.01" />
-  </ItemGroup>
+    <ItemDefinitionGroup>
+        <PackageReference PrivateAssets="all" ExcludeAssets="runtime" />
+        <Reference Private="false" />
+    </ItemDefinitionGroup>
 
-  <ItemGroup>
-    <Reference Include="Celeste" HintPath="$(CELESTEGAMEPATH)\Celeste.exe" />
-    <Reference Include="MMHOOK_Celeste" HintPath="$(CELESTEGAMEPATH)\MMHOOK_Celeste.dll" />
-    <Reference Include="YamlDotNet" HintPath="$(CELESTEGAMEPATH)\YamlDotNet.dll" />
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="MonoMod" Version="21.08.19.01" />
+        <PackageReference Include="MonoMod.RuntimeDetour" Version="21.08.19.01" />
+    </ItemGroup>
 
-  <Choose>
-    <When Condition="'$(OS)' != 'Windows_NT' Or Exists('$(CELESTEGAMEPATH)\FNA.dll')">
-      <ItemGroup>
-        <Reference Include="FNA" HintPath="$(CELESTEGAMEPATH)\FNA.dll" />
-      </ItemGroup>
-    </When>
+    <ItemGroup>
+        <Reference Include="Celeste" HintPath="$(CELESTEGAMEPATH)\Celeste.exe" />
+        <Reference Include="MMHOOK_Celeste" HintPath="$(CELESTEGAMEPATH)\MMHOOK_Celeste.dll" />
+        <Reference Include="YamlDotNet" HintPath="$(CELESTEGAMEPATH)\YamlDotNet.dll" />
+    </ItemGroup>
 
-    <Otherwise>
-      <ItemGroup>
-        <Reference Include="Microsoft.Xna.Framework" HintPath="$(WINDIR)\Microsoft.NET\assembly\GAC_32\Microsoft.Xna.Framework\v4.0_4.0.0.0__842cf8be1de50553\Microsoft.Xna.Framework.dll" />
-        <Reference Include="Microsoft.Xna.Framework.Game" HintPath="$(WINDIR)\Microsoft.NET\assembly\GAC_32\Microsoft.Xna.Framework.Game\v4.0_4.0.0.0__842cf8be1de50553\Microsoft.Xna.Framework.Game.dll" />
-        <Reference Include="Microsoft.Xna.Framework.Graphics" HintPath="$(WINDIR)\Microsoft.NET\assembly\GAC_32\Microsoft.Xna.Framework.Graphics\v4.0_4.0.0.0__842cf8be1de50553\Microsoft.Xna.Framework.Graphics.dll" />
-      </ItemGroup>
-    </Otherwise>
-  </Choose>
+    <Choose>
+        <When Condition="'$(OS)' != 'Windows_NT' Or Exists('$(CELESTEGAMEPATH)\FNA.dll')">
+            <ItemGroup>
+                <Reference Include="FNA" HintPath="$(CELESTEGAMEPATH)\FNA.dll" />
+            </ItemGroup>
+        </When>
 
-  <Target Name="CopyDLL" AfterTargets="Build">
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="../.."/>
-  </Target>
+        <Otherwise>
+            <ItemGroup>
+                <Reference Include="Microsoft.Xna.Framework" HintPath="$(WINDIR)\Microsoft.NET\assembly\GAC_32\Microsoft.Xna.Framework\v4.0_4.0.0.0__842cf8be1de50553\Microsoft.Xna.Framework.dll" />
+                <Reference Include="Microsoft.Xna.Framework.Game" HintPath="$(WINDIR)\Microsoft.NET\assembly\GAC_32\Microsoft.Xna.Framework.Game\v4.0_4.0.0.0__842cf8be1de50553\Microsoft.Xna.Framework.Game.dll" />
+                <Reference Include="Microsoft.Xna.Framework.Graphics" HintPath="$(WINDIR)\Microsoft.NET\assembly\GAC_32\Microsoft.Xna.Framework.Graphics\v4.0_4.0.0.0__842cf8be1de50553\Microsoft.Xna.Framework.Graphics.dll" />
+            </ItemGroup>
+        </Otherwise>
+    </Choose>
+
+    <Target Name="CopyDLL" AfterTargets="Build">
+        <Copy SourceFiles="$(TargetPath)" DestinationFolder="../.."/>
+        <Copy SourceFiles="$(DocumentationFile)" DestinationFolder="../.."/>
+    </Target>
 </Project>

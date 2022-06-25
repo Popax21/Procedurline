@@ -1,81 +1,11 @@
 using System;
-using System.Collections.Generic;
 using Microsoft.Xna.Framework;
-using Celeste;
-using System.Collections;
 
 namespace Celeste.Mod.Procedurline {
-    public class TextureData : IEnumerable<Point> {
-        private int width, height;
-        private Color[] pixels;
-
-        public TextureData(int width, int height) : this(width, height, new Color[width*height]) {}
-        public TextureData(int width, int height, Color[] pixels) {
-            if(width <= 0 || height <= 0) throw new ArgumentException();
-            if(pixels.Length != width*height) throw new ArgumentException();
-            this.width = width;
-            this.height = height;
-            this.pixels = pixels;
-        }
-
-        public TextureData(TextureData other) : this(other.Width, other.Height) {
-            Array.Copy(other.Pixels, pixels, pixels.Length);
-        }
-
-        public int Width => width;
-        public int Height => height;
-        public Color[] Pixels => pixels;
-
-        public TextureData GetSubsection(int x, int y, int width, int height) {
-            if(width <= 0 || height <= 0) throw new ArgumentException();
-            if(!InBounds(x, y) || !InBounds(x+width-1, y+height-1)) throw new IndexOutOfRangeException();
-            
-            //Transfer pixel data
-            TextureData subSect = new TextureData(width, height);
-            foreach(Point p in subSect) subSect[p] = this[x+p.X, y+p.Y];
-            return subSect;
-        }
-        public TextureData GetSubsection(Rectangle rect) => GetSubsection(rect.X, rect.Y, rect.Width, rect.Height);
-
-        public void SetSubsection(int x, int y, TextureData subSect) {
-            if(!InBounds(x, y) || !InBounds(x+subSect.Width-1, y+subSect.Height-1)) throw new IndexOutOfRangeException();
-            
-            //Transfer pixel data
-            foreach(Point p in subSect) this[x+p.X, y+p.Y] = subSect[p];
-        }
-        public void SetSubsection(Point off, TextureData subSect) => SetSubsection(off.X, off.Y, subSect);
-
-        public bool InBounds(int x, int y) {
-            return 0 <= x && 0 <= y && x < width && y < height;
-        }
-        public bool InBounds(Point p) => InBounds(p.X, p.Y);
-
-        public IEnumerator<Point> GetEnumerator() {
-            for(int x = 0; x < width; x++) {
-                for(int y = 0; y < height; y++) {
-                    yield return new Point(x, y);
-                }
-            }
-        }
-        IEnumerator IEnumerable.GetEnumerator() => this.GetEnumerator();
-
-        public Color this[int x, int y] {
-            get {
-                if(!InBounds(x, y)) throw new IndexOutOfRangeException();
-                return pixels[y*width + x];
-            }
-            set {
-                if(!InBounds(x, y)) throw new IndexOutOfRangeException();
-                pixels[y*width + x] = value;
-            }
-        }
-        public Color this[Point p] {
-            get => this[p.X, p.Y];
-            set => this[p.X, p.Y] = value;
-        }
-    }
-
-    public class TextureHeap {
+    /// <summary>
+    /// Implements a simple texture heap, which can be used to merge multiple texture data buffers into one big atlas
+    /// </summary>
+    public sealed class TextureHeap {
         private class Node {
             private Rectangle rect;
             private TextureData data;
@@ -124,7 +54,7 @@ namespace Celeste.Mod.Procedurline {
 
             public void TransferData(TextureData tex) {
                 //If this node contains data, transfer it
-                if(data != null) tex.SetSubsection(new Point(rect.X, rect.Y), data);
+                if(data != null) data.Copy(tex, dstRect: new Rectangle(rect.X, rect.Y, data.Width, data.Height));
                 else if(children != null) {
                     //Transfer children
                     for(int cx = 0; cx <= 1; cx++) {
@@ -158,6 +88,12 @@ namespace Celeste.Mod.Procedurline {
 
         private Node root = new Node(new Rectangle(0, 0, 8, 8));
 
+        /// <summary>
+        /// Adds texture data to the heap
+        /// </summary>
+        /// <returns>
+        /// Returns the subrectangle of the atlas texture corresponding to the added texture
+        /// </returns>
         public Rectangle AddTexture(TextureData texture) {
             if(texture.Width <= 0 || texture.Height <= 0) throw new ArgumentException("Size must be bigger than zero");
             while(true) {
@@ -170,10 +106,16 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
-        public TextureData CreateHeapTexture() {
+        /// <summary>
+        /// Creates the atlas texture
+        /// </summary>
+        public TextureData CreateAtlasTexture() {
             TextureData tex = new TextureData(root.Rectangle.Width, root.Rectangle.Height);
             root.TransferData(tex);
             return tex;
         }
+
+        public int AtlasWidth => root.Rectangle.Width;
+        public int AtlasHeight => root.Rectangle.Height;
     }
 }
