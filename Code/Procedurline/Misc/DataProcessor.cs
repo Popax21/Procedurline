@@ -36,7 +36,7 @@ namespace Celeste.Mod.Procedurline {
     }
 
     /// <summary>
-    /// Implements an <seealso cref="IDataProcessor{T, I, D}" /> which simply invokes the delegates it's given
+    /// Implements an <see cref="IDataProcessor{T, I, D}" /> which simply invokes the delegates it's given
     /// </summary>
     public class DelegateDataProcessor<T, I, D> : IDataProcessor<T, I, D> {
         public delegate void RegisterScopesDelegate(T target, DataScopeKey key);
@@ -55,14 +55,14 @@ namespace Celeste.Mod.Procedurline {
     }
 
     /// <summary>
-    /// Implements an <seealso cref="IDataProcessor{T, I, D}" /> which maintains an ordered collection of child data processors which are invoked in a specified order
+    /// Implements functionality shared between <seealso cref="CompositeDataProcessor{T, I, D}" /> and <seealso cref="CompositeAsyncDataProcessor{T, I, D}" />
     /// </summary>
-    public class CompositeDataProcessor<T, I, D> : IDisposable, IDataProcessor<T, I, D> {
+    public abstract class BaseCompositeDataProcessor<C, P, T> : IDisposable, IDataScopeRegistrar<T> where C : BaseCompositeDataProcessor<C, P, T> where P : class, IDataScopeRegistrar<T> {
         public sealed class ProcessorHandle : IDisposable {
             internal readonly object LOCK = new object();
-            private IDataProcessor<T, I, D> processor;
+            private P processor;
 
-            internal ProcessorHandle(CompositeDataProcessor<T, I, D> composite, int order, IDataProcessor<T, I, D> processor) {
+            internal ProcessorHandle(C composite, int order, P processor) {
                 Composite = composite;
                 Order = order;
                 this.processor = processor;
@@ -86,13 +86,13 @@ namespace Celeste.Mod.Procedurline {
                 lock(LOCK) processor = null;
             }
 
-            public CompositeDataProcessor<T, I, D> Composite { get; }
+            public C Composite { get; }
             public int Order { get; }
-            public IDataProcessor<T, I, D> Processor => processor;
+            public P Processor => processor;
         }
 
-        private readonly ReaderWriterLockSlim rwLock = new ReaderWriterLockSlim();
-        private readonly LinkedList<ProcessorHandle> processors = new LinkedList<ProcessorHandle>();
+        protected readonly ReaderWriterLockSlim rwLock = new ReaderWriterLockSlim();
+        protected readonly LinkedList<ProcessorHandle> processors = new LinkedList<ProcessorHandle>();
 
         public void Dispose() => rwLock?.Dispose();
 
@@ -102,7 +102,7 @@ namespace Celeste.Mod.Procedurline {
         /// <returns>
         /// Returns a <see cref="ProcessorHandle" /> which can be used to remove the processor from the composite
         /// </returns>
-        public virtual ProcessorHandle AddProcessor(int order, IDataProcessor<T, I, D> processor) => new ProcessorHandle(this, order, processor);
+        public virtual ProcessorHandle AddProcessor(int order, P processor) => new ProcessorHandle((C) this, order, processor);
 
         public void RegisterScopes(T target, DataScopeKey key) {
             CleanList();
@@ -110,7 +110,7 @@ namespace Celeste.Mod.Procedurline {
             rwLock.EnterReadLock();
             try {
                 for(LinkedListNode<ProcessorHandle> node = processors.First; node != null; ) {
-                    IDataProcessor<T, I, D> proc;
+                    P proc;
                     lock(node.Value.LOCK) proc = node.Value.Processor;
                     if(proc != null) proc.RegisterScopes(target, key);
                     lock(processors) node = node.Next;
@@ -120,6 +120,25 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
+        protected void CleanList() {
+            //Remove all disposed handles
+            rwLock.EnterWriteLock();
+            try {
+                for(LinkedListNode<ProcessorHandle> node = processors.First, nnode = node?.Next; node != null; node = nnode, nnode = node?.Next) {
+                    lock(node.Value.LOCK) {
+                        if(node.Value.Processor == null) processors.Remove(node);
+                    }
+                }
+            } finally {
+                rwLock.ExitWriteLock();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Implements an <see cref="IDataProcessor{T, I, D}" /> which maintains an ordered collection of child data processors which are invoked in a specified order
+    /// </summary>
+    public class CompositeDataProcessor<T, I, D> : BaseCompositeDataProcessor<CompositeDataProcessor<T, I, D>, IDataProcessor<T, I, D>, T>, IDataProcessor<T, I, D> {
         public bool ProcessData(T target, DataScopeKey key, I id, ref D data) {
             CleanList();
 
@@ -137,18 +156,27 @@ namespace Celeste.Mod.Procedurline {
                 rwLock.ExitReadLock();
             }
         }
+    }
 
-        private void CleanList() {
-            //Remove all disposed handles
-            rwLock.EnterWriteLock();
+    /// <summary>
+    /// Implements an <see cref="IAsyncDataProcessor{T, I, D}" /> which maintains an ordered collection of child data processors which are invoked in a specified order
+    /// </summary>
+    public class CompositeAsyncDataProcessor<T, I, D> : BaseCompositeDataProcessor<CompositeAsyncDataProcessor<T, I, D>, IAsyncDataProcessor<T, I, D>, T>, IAsyncDataProcessor<T, I, D> {
+        public async Task<bool> ProcessDataAsync(T target, DataScopeKey key, I id, AsyncRef<D> data, CancellationToken token = default) {
+            CleanList();
+
+            rwLock.EnterReadLock();
             try {
-                for(LinkedListNode<ProcessorHandle> node = processors.First, nnode = node?.Next; node != null; node = nnode, nnode = node?.Next) {
-                    lock(node.Value.LOCK) {
-                        if(node.Value.Processor == null) processors.Remove(node);
-                    }
+                bool modifiedData = false;
+                for(LinkedListNode<ProcessorHandle> node = processors.First; node != null; ) {
+                    IAsyncDataProcessor<T, I, D> proc;
+                    lock(node.Value.LOCK) proc = node.Value.Processor;
+                    if(proc != null) modifiedData |= await proc.ProcessDataAsync(target, key, id, data, token);
+                    lock(processors) node = node.Next;
                 }
+                return modifiedData;
             } finally {
-                rwLock.ExitWriteLock();
+                rwLock.ExitReadLock();
             }
         }
     }
