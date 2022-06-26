@@ -92,9 +92,9 @@ namespace Celeste.Mod.Procedurline {
         }
 
         private void InvalidateUnlocked(LinkedList<DataScopeKey> invalKeys) {
-            //Finish of key invalidation
+            //Finish key invalidation
             foreach(DataScopeKey key in invalKeys) {
-                lock(key) {
+                lock(key.LOCK) {
                     if(!key.IsDisposed && key.isInvalidating) key.Invalidate();
                 }
             }

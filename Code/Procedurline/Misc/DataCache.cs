@@ -64,8 +64,7 @@ namespace Celeste.Mod.Procedurline {
 
                             return cache.GetOrAdd(key, _ => {
                                 D data = CreateScopedData(key);
-                                key.TakeOwnership(data);
-                                key.TakeOwnership(key);
+                                key.OnInvalidate += KeyInvalidated;
                                 key = null; //Don't dispose the key
                                 return data;
                             });
@@ -77,6 +76,26 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
+        /// <summary>
+        /// Retrieves the associated scoped data for the given scope key.
+        /// If there is no scoped data chached for the key, no new data is created, as the key alone doesn't hold enough information to create it.
+        /// </summary>
+        /// <returns>
+        /// <c>null</c> if the key doesn't have any cached data.
+        /// </returns>
+        public D GetScopedData(DataScopeKey key) {
+            lock(key.LOCK) {
+                //Check if there is cached data
+                if(cache.TryGetValue(key, out D data)) return data;
+                return null;
+            }
+        }
+
+        private void KeyInvalidated(DataScopeKey key) {
+            //Remove the key's scoped data from the cache
+            if(cache.TryRemove(key, out D data)) data.Dispose();
+            key.Dispose();
+        }
 
         /// <summary>
         /// Creates a new key for use with the scope registrar.
@@ -188,7 +207,11 @@ namespace Celeste.Mod.Procedurline {
         public virtual bool ProcessData(T target, DataScopeKey key, I id, ref D data) {
             //Get the target's scoped cache
             retry:;
-            ScopedCache scache = GetScopedData(target);
+            ScopedCache scache = null;
+            if(key != null) scache ??= GetScopedData(key);
+            scache ??= GetScopedData(target);
+
+            if(scache == null) return false;
 
             lock(scache.LOCK) {
                 if(scache.IsDisposed) goto retry; //Prevent race conditions
@@ -316,7 +339,11 @@ namespace Celeste.Mod.Procedurline {
         public virtual Task<bool> ProcessDataAsync(T target, DataScopeKey key, I id, AsyncRef<D> data, CancellationToken token = default) {
             //Get the target's scoped cache
             retry:;
-            ScopedCache scache = GetScopedData(target);
+            ScopedCache scache = null;
+            if(key != null) scache ??= GetScopedData(key);
+            scache ??= GetScopedData(target);
+
+            if(scache == null) return Task.FromResult(false);
 
             lock(scache.LOCK) {
                 if(scache.IsDisposed) goto retry; //Prevent race conditions
