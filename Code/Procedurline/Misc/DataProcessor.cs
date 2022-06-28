@@ -57,7 +57,7 @@ namespace Celeste.Mod.Procedurline {
     /// <summary>
     /// Implements functionality shared between <seealso cref="CompositeDataProcessor{T, I, D}" /> and <seealso cref="CompositeAsyncDataProcessor{T, I, D}" />
     /// </summary>
-    public abstract class BaseCompositeDataProcessor<C, P, T> : IDisposable, IDataScopeRegistrar<T> where C : BaseCompositeDataProcessor<C, P, T> where P : class, IDataScopeRegistrar<T> {
+    public abstract class BaseCompositeDataProcessor<C, P, T> : IDataScopeRegistrar<T> where C : BaseCompositeDataProcessor<C, P, T> where P : class, IDataScopeRegistrar<T> {
         public sealed class ProcessorHandle : IDisposable {
             internal readonly object LOCK = new object();
             private P processor;
@@ -68,7 +68,7 @@ namespace Celeste.Mod.Procedurline {
                 this.processor = processor;
 
                 //Insert into the processor list while keeping it sorted
-                composite.rwLock.EnterReadLock();
+                composite.Lock();
                 try {
                     LinkedListNode<ProcessorHandle> nextNode = composite.processors.First;
                     while(nextNode != null && nextNode.Value.Order < order) nextNode = nextNode.Next;
@@ -78,7 +78,7 @@ namespace Celeste.Mod.Procedurline {
                         else composite.processors.AddLast(this);
                     }
                 } finally {
-                    composite.rwLock.ExitReadLock();
+                    composite.Unlock();
                 }
             }
 
@@ -91,10 +91,10 @@ namespace Celeste.Mod.Procedurline {
             public P Processor => processor;
         }
 
-        protected readonly ReaderWriterLockSlim rwLock = new ReaderWriterLockSlim();
-        protected readonly LinkedList<ProcessorHandle> processors = new LinkedList<ProcessorHandle>();
+        private readonly object LOCK = new object();
+        private int numUsers;
 
-        public void Dispose() => rwLock?.Dispose();
+        protected readonly LinkedList<ProcessorHandle> processors = new LinkedList<ProcessorHandle>();
 
         /// <summary>
         /// Adds a new processor to the composite processor. Duplicates are allowed.
@@ -105,9 +105,7 @@ namespace Celeste.Mod.Procedurline {
         public virtual ProcessorHandle AddProcessor(int order, P processor) => new ProcessorHandle((C) this, order, processor);
 
         public void RegisterScopes(T target, DataScopeKey key) {
-            CleanList();
-
-            rwLock.EnterReadLock();
+            Lock();
             try {
                 for(LinkedListNode<ProcessorHandle> node = processors.First; node != null; ) {
                     P proc;
@@ -116,22 +114,24 @@ namespace Celeste.Mod.Procedurline {
                     lock(processors) node = node.Next;
                 }
             } finally {
-                rwLock.ExitReadLock();
+                Unlock();
             }
         }
 
-        protected void CleanList() {
-            //Remove all disposed handles
-            rwLock.EnterWriteLock();
-            try {
-                for(LinkedListNode<ProcessorHandle> node = processors.First, nnode = node?.Next; node != null; node = nnode, nnode = node?.Next) {
-                    lock(node.Value.LOCK) {
-                        if(node.Value.Processor == null) processors.Remove(node);
+        protected void Lock() {
+            lock(LOCK) {
+                if(numUsers++ == 0) {
+                    for(LinkedListNode<ProcessorHandle> node = processors.First, nnode = node?.Next; node != null; node = nnode, nnode = node?.Next) {
+                        lock(node.Value.LOCK) {
+                            if(node.Value.Processor == null) processors.Remove(node);
+                        }
                     }
                 }
-            } finally {
-                rwLock.ExitWriteLock();
             }
+        }
+
+        protected void Unlock() {
+            lock(LOCK) numUsers--;
         }
     }
 
@@ -140,9 +140,7 @@ namespace Celeste.Mod.Procedurline {
     /// </summary>
     public class CompositeDataProcessor<T, I, D> : BaseCompositeDataProcessor<CompositeDataProcessor<T, I, D>, IDataProcessor<T, I, D>, T>, IDataProcessor<T, I, D> {
         public bool ProcessData(T target, DataScopeKey key, I id, ref D data) {
-            CleanList();
-
-            rwLock.EnterReadLock();
+            Lock();
             try {
                 bool modifiedData = false;
                 for(LinkedListNode<ProcessorHandle> node = processors.First; node != null; ) {
@@ -153,7 +151,7 @@ namespace Celeste.Mod.Procedurline {
                 }
                 return modifiedData;
             } finally {
-                rwLock.ExitReadLock();
+                Unlock();
             }
         }
     }
@@ -163,9 +161,7 @@ namespace Celeste.Mod.Procedurline {
     /// </summary>
     public class CompositeAsyncDataProcessor<T, I, D> : BaseCompositeDataProcessor<CompositeAsyncDataProcessor<T, I, D>, IAsyncDataProcessor<T, I, D>, T>, IAsyncDataProcessor<T, I, D> {
         public async Task<bool> ProcessDataAsync(T target, DataScopeKey key, I id, AsyncRef<D> data, CancellationToken token = default) {
-            CleanList();
-
-            rwLock.EnterReadLock();
+            Lock();
             try {
                 bool modifiedData = false;
                 for(LinkedListNode<ProcessorHandle> node = processors.First; node != null; ) {
@@ -176,7 +172,7 @@ namespace Celeste.Mod.Procedurline {
                 }
                 return modifiedData;
             } finally {
-                rwLock.ExitReadLock();
+                Unlock();
             }
         }
     }
