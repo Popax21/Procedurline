@@ -319,19 +319,9 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
-        /// <returns>
-        /// Gets the owned object of the specified type, or <c>null</c> if there is no owned object of that type.
-        /// </returns>
-        public virtual T GetOwnedObject<T>() where T : class, IDisposable {
-            lock(LOCK) {
-                if(scopes == null) throw new ObjectDisposedException("DataScopeKey");
-                if(!IsValid) return null;
-                return ownedObjects.FirstOrDefault(o => o is T) as T;
-            }
-        }
-
         public override bool Equals(object obj) => obj is DataScopeKey other && Equals(other);
         public virtual bool Equals(DataScopeKey other) {
+            if(other == null) return false;
             if(ID > other.ID) return other.Equals(this);
 
             lock(LOCK) lock(VALIDITY_LOCK) {
@@ -399,9 +389,6 @@ namespace Celeste.Mod.Procedurline {
         /// Invoked by <seealso cref="InvalidateRegistrars" /> when the key's registrars are invalidated, with <see cref="DataScopeKey.LOCK" /> held.
         /// </summary>
         public event Action<DataScopeKey> OnInvalidateRegistrars;
-
-        public static bool operator ==(DataScopeKey a, DataScopeKey b) => a.Equals(b);
-        public static bool operator !=(DataScopeKey a, DataScopeKey b) => !a.Equals(b);
     }
 
     /// <summary>
