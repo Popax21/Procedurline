@@ -217,7 +217,7 @@ namespace Celeste.Mod.Procedurline {
                 if(scache.IsDisposed) goto retry; //Prevent race conditions
 
                 //Let the scoped cache process the data
-                return scache.ProcessData(target, key, id, ref data);
+                return scache.ProcessData(target, scache.Key, id, ref data);
             }
         }
 
@@ -349,7 +349,7 @@ namespace Celeste.Mod.Procedurline {
                 if(scache.IsDisposed) goto retry; //Prevent race conditions
 
                 //Let the scoped cache process the data
-                return scache.ProcessDataAsync(target, key, id, data);
+                return scache.ProcessDataAsync(target, scache.Key, id, data);
             }
         }
 
