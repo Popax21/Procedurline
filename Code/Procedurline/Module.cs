@@ -25,6 +25,13 @@ namespace Celeste.Mod.Procedurline {
 
         private List<IDetour> contentHooks = new List<IDetour>();
 
+        private MethodInfo FindMethod(Type type, string name) {
+            MethodInfo method = type.GetMethod(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance);
+            if(method != null) return method;
+            if(type.BaseType != null) return FindMethod(type.BaseType, name);
+            throw new ArgumentException($"Could not find method '{name}'!");
+        }
+
         public override void Load() {
             //Create components
             globalManager = new GlobalManager(Celeste.Instance);
@@ -44,11 +51,11 @@ namespace Celeste.Mod.Procedurline {
                 foreach(MethodInfo method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static)) {
                     if(method.IsStatic) {
                         if(method.GetCustomAttribute(typeof(ContentHookAttribute)) is ContentHookAttribute hookAttr) {
-                            contentHooks.Add(new Hook(type.GetMethod(hookAttr.HookTargetName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.FlattenHierarchy), method));
+                            contentHooks.Add(new Hook(FindMethod(type, hookAttr.HookTargetName), method));
                         }
 
                         if(method.GetCustomAttribute(typeof(ContentILHookAttribute)) is ContentILHookAttribute ilHookAttr) {
-                            contentHooks.Add(new ILHook(type.GetMethod(ilHookAttr.HookTargetName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.FlattenHierarchy), (ILContext.Manipulator) method.CreateDelegate(typeof(ILContext.Manipulator))));
+                            contentHooks.Add(new ILHook(FindMethod(type, ilHookAttr.HookTargetName), (ILContext.Manipulator) method.CreateDelegate(typeof(ILContext.Manipulator))));
                         }
                     } else {
                         if(method.GetCustomAttribute(typeof(ContentVirtualizeAttribute)) is ContentVirtualizeAttribute) {

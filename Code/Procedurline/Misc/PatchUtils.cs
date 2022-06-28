@@ -10,7 +10,7 @@ using MonoMod.RuntimeDetour;
 namespace Celeste.Mod.Procedurline {
     public static class PatchUtils {
         [ThreadStatic]
-        private static bool fromVirtualized;
+        private static bool fromVirtualized = false;
 
         /// <summary>
         /// Virtualizes the given method.
@@ -19,11 +19,11 @@ namespace Celeste.Mod.Procedurline {
         /// </summary>
         public static void Virtualize(MethodInfo method, IList<IDetour> hooks) {
             //Get the hidden base method
-            MethodInfo hiddenMethod = method.DeclaringType.GetMethod(method.Name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
+            MethodInfo hiddenMethod = method.DeclaringType.BaseType.GetMethod(method.Name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
 
             //Check parameters
-            ParameterInfo[] parameters = hiddenMethod.GetParameters();
-            if(!parameters.SequenceEqual(method.GetParameters()) || method.ReturnParameter != hiddenMethod.ReturnParameter) throw new InvalidOperationException("Virtual method has different parameters than the base method!");
+            Type[] parameters = hiddenMethod.GetParameters().Select(p => p.ParameterType).ToArray();
+            if(!parameters.SequenceEqual(method.GetParameters().Select(p => p.ParameterType)) || method.ReturnParameter.ParameterType != hiddenMethod.ReturnParameter.ParameterType) throw new InvalidOperationException($"Virtual method '{method.Name}' has different parameters than the base method!");
 
             //Install base method hook
             hooks.Add(new ILHook(hiddenMethod, ctx => {
@@ -33,7 +33,10 @@ namespace Celeste.Mod.Procedurline {
 
                 //Check if the object is the declaring type
                 cursor.Emit(OpCodes.Ldarg_0);
-                cursor.Emit(OpCodes.Isinst);
+                cursor.Emit(OpCodes.Isinst, method.DeclaringType);
+                cursor.Emit(OpCodes.Ldnull);
+                cursor.Emit(OpCodes.Cgt_Un);
+                cursor.Emit(OpCodes.Neg);
                 cursor.Emit(OpCodes.Ldsfld, fromVirtualizedField);
                 cursor.Emit(OpCodes.Or);
                 cursor.Emit(OpCodes.Brfalse, notDeclareType);
@@ -44,7 +47,7 @@ namespace Celeste.Mod.Procedurline {
 
                 cursor.Emit(OpCodes.Ldarg_0);
                 cursor.Emit(OpCodes.Castclass, method.DeclaringType);
-                for(int i = 0; i < parameters.Length; i++) cursor.Emit(OpCodes.Ldarg, i);
+                for(int i = 0; i < parameters.Length; i++) cursor.Emit(OpCodes.Ldarg, 1+i);
                 cursor.Emit(OpCodes.Callvirt, method);
                 cursor.Emit(OpCodes.Ret);
 
@@ -63,7 +66,8 @@ namespace Celeste.Mod.Procedurline {
                 cursor.Emit(OpCodes.Stsfld, fromVirtualizedField);
 
                 cursor.Emit(OpCodes.Ldarg_0);
-                for(int i = 0; i < parameters.Length; i++) cursor.Emit(OpCodes.Ldarg, i);
+                cursor.Emit(OpCodes.Castclass, hiddenMethod.DeclaringType);
+                for(int i = 0; i < parameters.Length; i++) cursor.Emit(OpCodes.Ldarg, 1+i);
                 cursor.Emit(OpCodes.Callvirt, hiddenMethod);
                 cursor.Emit(OpCodes.Ret);
                 cursor.MarkLabel(tryEnd);
