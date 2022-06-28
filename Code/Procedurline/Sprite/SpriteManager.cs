@@ -36,7 +36,7 @@ namespace Celeste.Mod.Procedurline {
             }
 
             public Task<bool> ProcessDataAsync(Sprite sprite, DataScopeKey key, string animId, AsyncRef<Sprite.Animation> animRef, CancellationToken token = default) {
-                SpriteAnimationCache.ScopedCache scache = key.GetOwnedObject<SpriteAnimationCache.ScopedCache>();
+                SpriteAnimationCache.ScopedCache scache = (SpriteAnimationCache.ScopedCache) Manager.AnimationCache.GetScopedData(key);
                 if(ProcedurlineModule.Settings.UseThreadPool) return Task.Run(() => ProcessAnimation(sprite, scache, animId, animRef, token));
                 else return ProcessAnimation(sprite, scache, animId, animRef, token);
             }
@@ -73,6 +73,7 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
+        public readonly CompositeAsyncDataProcessor<Sprite, string, Sprite.Animation> AnimationMixer;
         public readonly CompositeDataProcessor<Sprite, string, SpriteAnimationData> AnimationProcessor;
         public readonly SpriteAnimationCache AnimationCache;
         private readonly List<ILHook> animationHooks = new List<ILHook>();
@@ -85,8 +86,10 @@ namespace Celeste.Mod.Procedurline {
             game.Components.Add(this);
 
             //Setup animation processing and caching
+            AnimationMixer = new CompositeAsyncDataProcessor<Sprite, string, Sprite.Animation>();
             AnimationProcessor = new CompositeDataProcessor<Sprite, string, SpriteAnimationData>();
             AnimationCache = new SpriteAnimationCache(new TextureScope("ANIMCACHE", ProcedurlineModule.TextureManager.GlobalScope), new AnimationCacheProcessor(this));
+            AnimationMixer.AddProcessor(0, AnimationCache);
 
             //Register default scope registrar
             AnimationProcessor.AddProcessor(int.MinValue, new DelegateDataProcessor<Sprite, string, SpriteAnimationData>(registerScopes: RegisterDefaultScopes));
@@ -161,7 +164,6 @@ namespace Celeste.Mod.Procedurline {
 
             AnimationCache?.Dispose();
             AnimationCache.TextureScope?.Dispose();
-            AnimationProcessor?.Dispose();
 
             Game.Components.Remove(this);
             base.Dispose(disposing);

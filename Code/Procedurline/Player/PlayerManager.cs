@@ -88,11 +88,6 @@ namespace Celeste.Mod.Procedurline {
             On.Celeste.PlayerHair.GetHairScale -= HairNodeScaleHook;
             On.Celeste.PlayerHair.GetHairTexture -= HairNodeTextureHook;
 
-            //Dispose processors
-            HairSettingsProcessor?.Dispose();
-            HairColorProcessor?.Dispose();
-            HairNodeProcessor?.Dispose();
-
             Game.Components.Remove(this);
             base.Dispose(disposing);
         }

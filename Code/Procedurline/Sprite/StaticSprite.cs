@@ -184,7 +184,7 @@ namespace Celeste.Mod.Procedurline {
                     ProcedurlineModule.GlobalScope.RegisterKey(scopeKey);
                     ProcedurlineModule.StaticScope.RegisterKey(scopeKey);
                     Sprite.Processor.RegisterScopes(Sprite, scopeKey);
-                    lock(scopeKey.LOCK) {
+                    lock(scopeKey.VALIDITY_LOCK) {
                         if(!scopeKey.IsValid) {
                             //Could happen because of race conditions
                             goto retryKey;

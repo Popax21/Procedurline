@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Reflection;
@@ -19,21 +20,26 @@ namespace Celeste.Mod.Procedurline {
         public readonly object LOCK = new object();
         public readonly Sprite Sprite;
         public readonly string SpriteID;
+        public readonly DataScopeKey ScopeKey;
         public readonly bool OwnedByManager;
         internal int numReferences;
+        private bool hasValidKey;
         private bool staticSpriteHandlersRegistered;
 
         private bool didError = false;
         private Dictionary<string, Sprite.Animation> errorAnimations = new Dictionary<string, Sprite.Animation>(StringComparer.OrdinalIgnoreCase);
 
-        private SpriteAnimationCache.ScopedCache scopedCache;
         private CancellationTokenSource cancelSrc;
         private Dictionary<string, Task<Sprite.Animation>> procTasks = new Dictionary<string, Task<Sprite.Animation>>(StringComparer.OrdinalIgnoreCase);
 
         internal ProcessedSprite(Sprite sprite, string spriteId, bool ownedByManager) {
             Sprite = sprite;
             SpriteID = spriteId;
+            ScopeKey = new DataScopeKey();
             OwnedByManager = ownedByManager;
+
+            ScopeKey.OnInvalidate += OnInvalidate;
+            ScopeKey.OnInvalidateRegistrars += OnInvalidate;
 
             //If the sprite is a static sprite, register its handlers
             if(sprite is StaticSprite staticSprite) {
@@ -54,12 +60,8 @@ namespace Celeste.Mod.Procedurline {
 
                 procTasks = null;
 
-                //Remove scoped cache event handlers
-                if(scopedCache != null) {
-                    scopedCache.OnInvalidate -= OnScopedCacheInvalidate;
-                    scopedCache.OnInvalidateRegistrars -= OnScopedCacheInvalidate;
-                    scopedCache = null;
-                }
+                //Dispose the scope key
+                ScopeKey?.Dispose();
 
                 //If the sprite is a static sprite, unregister its handlers
                 if(Sprite is StaticSprite staticSprite && staticSpriteHandlersRegistered) {
@@ -74,94 +76,79 @@ namespace Celeste.Mod.Procedurline {
         /// If the processed animation isn't cached, starts an asynchronous processing task, and the original animation is returned in the mean time.
         /// </summary>
         public Sprite.Animation GetAnimation(string animId) {
+            lock(ScopeKey.LOCK)
             lock(LOCK) {
                 if(procTasks == null) throw new ObjectDisposedException("ProcessedSprite");
 
                 //Get the original animation
                 if(!Sprite.Animations.TryGetValue(animId, out Sprite.Animation origAnim)) origAnim = null;
 
-                //If we don't have a cached scoped cache reference, obtain a new one
-                retry:;
-                if(scopedCache == null) {
-                    scopedCache = (SpriteAnimationCache.ScopedCache) ProcedurlineModule.SpriteManager.AnimationCache.GetScopedData(Sprite);
+                //If we don't have a valid scope key, obtain a new one
+                while(!hasValidKey || !ScopeKey.IsValid) {
+                    ScopeKey.Reset();
+                    ProcedurlineModule.SpriteManager.AnimationMixer.RegisterScopes(Sprite, ScopeKey);
+                    hasValidKey = true;
+                }
+                //We might race and have an valid key outside of the loop, but in that case, our callbacks will reset our cache soon anyway
 
-                    if(scopedCache == null) {
-                        //The sprite isn't able to have a scoped cache reference
-                        return origAnim;
-                    }
-
-                    scopedCache.OnInvalidate += OnScopedCacheInvalidate;
-                    scopedCache.OnInvalidateRegistrars += OnScopedCacheInvalidate;
+                //Check for already running task
+                if(!procTasks.TryGetValue(animId, out Task<Sprite.Animation> procTask)) {
+                    //Start new processor task
+                    if(cancelSrc == null) cancelSrc = new CancellationTokenSource();
+                    procTasks.Add(animId, procTask = GetProcessorTask(animId, origAnim, cancelSrc.Token));
+                    procTask.ContinueWithOrInvoke(t => {
+                        if(t.Status == TaskStatus.RanToCompletion) ReloadAnimation(animId);
+                        else if(t.Exception != null) {
+                            Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Error processing sprite '{SpriteID}' animation '{animId}': {t.Exception}");
+                        }
+                    }, cancelSrc.Token);
                 }
 
-                lock(scopedCache.LOCK) {
-                    if(scopedCache.IsDisposed) {
-                        ResetScopedCache();
-                        goto retry;
-                    }
+                if(procTask.IsCompleted) {
+                    if(procTask.Status != TaskStatus.RanToCompletion) {
+                        didError = true;
 
-                    //Check for already running task
-                    if(!procTasks.TryGetValue(animId, out Task<Sprite.Animation> procTask)) {
-                        //Start new processor task
-                        if(cancelSrc == null) cancelSrc = new CancellationTokenSource();
-                        procTasks.Add(animId, procTask = WrapCacheTask(animId));
-                        procTask.ContinueWithOrInvoke(t => {
-                            if(t.Status == TaskStatus.RanToCompletion) ReloadAnimation(animId);
-                        }, cancelSrc.Token);
-                    }
+                        //Try to get a cached error animation
+                        if(errorAnimations.TryGetValue(animId, out Sprite.Animation errorAnim)) return errorAnim;
 
-                    if(procTask.IsCompleted) {
-                        if(procTask.Status != TaskStatus.RanToCompletion) {
-                            didError = true;
+                        //Create a new error animation
+                        errorAnim = new Sprite.Animation();
+                        errorAnim.Goto = origAnim?.Goto;
+                        errorAnim.Delay = origAnim?.Delay ?? 0;
+                        errorAnim.Frames = new MTexture[origAnim?.Frames?.Length ?? 1];
+                        for(int i = 0; i < errorAnim.Frames.Length; i++) {
+                            errorAnim.Frames[i] = new MTexture(
+                                ProcedurlineModule.TextureManager.ErrorTexture.MTexture,
+                                origAnim?.Frames[i]?.AtlasPath,
+                                new Rectangle(0, 0, ProcedurlineModule.TextureManager.ErrorTexture.Width, ProcedurlineModule.TextureManager.ErrorTexture.Height),
+                                origAnim?.Frames[i]?.DrawOffset ?? Vector2.Zero,
+                                origAnim?.Frames[i]?.Width ?? 32, origAnim?.Frames[i]?.Height ?? 32
+                            );
+                            errorAnim.Frames[i].ScaleFix = Math.Min(
+                                (float) errorAnim.Frames[i].Width / errorAnim.Frames[i].ClipRect.Width,
+                                (float) errorAnim.Frames[i].Height / errorAnim.Frames[i].ClipRect.Height
+                            );
+                        }
 
-                            //Try to get a cached error animation
-                            if(errorAnimations.TryGetValue(animId, out Sprite.Animation errorAnim)) return errorAnim;
-
-                            //Create a new error animation
-                            errorAnim = new Sprite.Animation();
-                            errorAnim.Goto = origAnim?.Goto;
-                            errorAnim.Delay = origAnim?.Delay ?? 0;
-                            errorAnim.Frames = new MTexture[origAnim?.Frames?.Length ?? 1];
-                            for(int i = 0; i < errorAnim.Frames.Length; i++) {
-                                errorAnim.Frames[i] = new MTexture(
-                                    ProcedurlineModule.TextureManager.ErrorTexture.MTexture,
-                                    origAnim?.Frames[i]?.AtlasPath,
-                                    new Rectangle(0, 0, ProcedurlineModule.TextureManager.ErrorTexture.Width, ProcedurlineModule.TextureManager.ErrorTexture.Height),
-                                    origAnim?.Frames[i]?.DrawOffset ?? Vector2.Zero,
-                                    origAnim?.Frames[i]?.Width ?? 32, origAnim?.Frames[i]?.Height ?? 32
-                                );
-                                errorAnim.Frames[i].ScaleFix = Math.Min(
-                                    (float) errorAnim.Frames[i].Width / errorAnim.Frames[i].ClipRect.Width,
-                                    (float) errorAnim.Frames[i].Height / errorAnim.Frames[i].ClipRect.Height
-                                );
-                            }
-
-                            errorAnimations.Add(animId, errorAnim);
-                            return errorAnim;
-                        } else return procTask.Result;
-                    }
-
-                    //Block the engine if async dynamic processing is disabled
-                    if(!ProcedurlineModule.Settings.AsynchronousDynamicProcessing) {
-                        ProcedurlineModule.GlobalManager.BlockEngineOnTask(procTask);
-                    }
-
-                    //Return the original animation while the processor task is still running
-                    return origAnim;
+                        errorAnimations.Add(animId, errorAnim);
+                        return errorAnim;
+                    } else return procTask.Result;
                 }
+
+                //Block the engine if async dynamic processing is disabled
+                if(!ProcedurlineModule.Settings.AsynchronousDynamicProcessing) {
+                    ProcedurlineModule.GlobalManager.BlockEngineOnTask(procTask);
+                }
+
+                //Return the original animation while the processor task is still running
+                return origAnim;
             }
         }
 
-        private async Task<Sprite.Animation> WrapCacheTask(string animId) {
-            //Get the original animation
-            Sprite.Animation origAnim;
-            if(!Sprite.Animations.TryGetValue(animId, out origAnim)) origAnim = null;
-
-            //Invoke cache
+        private async Task<Sprite.Animation> GetProcessorTask(string animId, Sprite.Animation origAnim, CancellationToken token) {
             AsyncRef<Sprite.Animation> animRef = new AsyncRef<Sprite.Animation>(origAnim);
-            await scopedCache.ProcessDataAsync(Sprite, scopedCache.Key, animId, animRef, cancelSrc.Token);
-
-            return animRef;
+            await ProcedurlineModule.SpriteManager.AnimationMixer.ProcessDataAsync(Sprite, ScopeKey, animId, animRef, token);
+            return animRef.Data;
         }
 
         /// <summary>
@@ -207,15 +194,12 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
-        /// Resets the sprite's scoped cache reference and obtains a new one.
+        /// Resets the sprite's own cache of processor tasks.
         /// </summary>
-        public void ResetScopedCache() {
+        public void ResetCache() {
             lock(LOCK) {
-                if(scopedCache == null) return;
-
-                scopedCache.OnInvalidate -= OnScopedCacheInvalidate;
-                scopedCache.OnInvalidateRegistrars -= OnScopedCacheInvalidate;
-                scopedCache = null;
+                hasValidKey = false;
+                ScopeKey.Reset();
 
                 //Cancel tasks
                 cancelSrc?.Cancel();
@@ -248,11 +232,9 @@ namespace Celeste.Mod.Procedurline {
             }
 
             lock(LOCK) {
-                if(scopedCache != null) {
-                    str.AppendLine($"CACHE: {scopedCache.NumCached} / pend {scopedCache.NumPending} [{procTasks.Count}]");
-                    if(didError) str.AppendLine("!!!ERROR!!!");
-                    str.Append(scopedCache.Key.GetScopeListString("\n"));
-                }
+                str.AppendLine($"CACHE {procTasks.Count} ({procTasks.Count(kv => !kv.Value.IsCompleted)} pend)");
+                if(didError) str.AppendLine("!!!ERROR!!!");
+                str.Append(ScopeKey.GetScopeListString("\n"));
             }
 
             if(layoutPass) {
@@ -309,9 +291,9 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
-        private void OnScopedCacheInvalidate(AsyncDataProcessorCache<Sprite, string, Sprite.Animation>.ScopedCache obj) {
-            //Our cached scoped cache reference isn't valid anymore
-            ResetScopedCache();
+        private void OnInvalidate(DataScopeKey key) {
+            //Our scope isn't valid anymore
+            ResetCache();
         }
 
         public bool IsDisposed {
