@@ -15,8 +15,8 @@
     </ItemDefinitionGroup>
 
     <ItemGroup>
-        <PackageReference Include="MonoMod" Version="21.08.19.01" />
-        <PackageReference Include="MonoMod.RuntimeDetour" Version="21.08.19.01" />
+        <PackageReference Include="MonoMod" Version="22.5.1.1" />
+        <PackageReference Include="MonoMod.RuntimeDetour" Version="22.5.1.1" />
     </ItemGroup>
 
     <ItemGroup>
