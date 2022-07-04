@@ -49,8 +49,8 @@ namespace Celeste.Mod.Procedurline {
                     //Get sprite animation data
                     using(SpriteAnimationData animData = (animRef.Data != null) ? await Manager.GetAnimationData(animRef, token) : null) {
                         //Run processor
-                        SpriteAnimationData procAnimData = animData;
-                        if(!Manager.AnimationProcessor.ProcessData(sprite, scache.Key, animId, ref procAnimData)) {
+                        AsyncRef<SpriteAnimationData> procAnimData = new AsyncRef<SpriteAnimationData>(animData);
+                        if(!await Manager.AnimationProcessor.ProcessDataAsync(sprite, scache.Key, animId, procAnimData, token)) {
                             //Optimize by returning the original animation
                             return false;
                         }
@@ -74,7 +74,7 @@ namespace Celeste.Mod.Procedurline {
         }
 
         public readonly CompositeAsyncDataProcessor<Sprite, string, Sprite.Animation> AnimationMixer;
-        public readonly CompositeDataProcessor<Sprite, string, SpriteAnimationData> AnimationProcessor;
+        public readonly CompositeAsyncDataProcessor<Sprite, string, SpriteAnimationData> AnimationProcessor;
         public readonly SpriteAnimationCache AnimationCache;
         private readonly List<ILHook> animationHooks = new List<ILHook>();
 
@@ -87,12 +87,12 @@ namespace Celeste.Mod.Procedurline {
 
             //Setup animation processing and caching
             AnimationMixer = new CompositeAsyncDataProcessor<Sprite, string, Sprite.Animation>();
-            AnimationProcessor = new CompositeDataProcessor<Sprite, string, SpriteAnimationData>();
+            AnimationProcessor = new CompositeAsyncDataProcessor<Sprite, string, SpriteAnimationData>();
             AnimationCache = new SpriteAnimationCache(new TextureScope("ANIMCACHE", ProcedurlineModule.TextureManager.GlobalScope), new AnimationCacheProcessor(this));
             AnimationMixer.AddProcessor(0, AnimationCache);
 
             //Register default scope registrar
-            AnimationProcessor.AddProcessor(int.MinValue, new DelegateDataProcessor<Sprite, string, SpriteAnimationData>(registerScopes: RegisterDefaultScopes));
+            AnimationProcessor.AddProcessor(int.MinValue, new DelegateDataProcessor<Sprite, string, SpriteAnimationData>(registerScopes: RegisterDefaultScopes).WrapAsync());
 
             //Install hooks
             using(new DetourContext(1000000)) {
