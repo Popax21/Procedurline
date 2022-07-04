@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Xna.Framework;
 
 using Monocle;
@@ -55,6 +57,32 @@ namespace Celeste.Mod.Procedurline {
         public bool ApplyFrameProcessor(IDataProcessor<Sprite, int, AnimationFrame> processor, Sprite target, DataScopeKey scopeKey) {
             bool didModify = false;
             for(int i = 0; i < Frames.Length; i++) didModify |= processor.ProcessData(target, scopeKey, i, ref Frames[i]);
+            return didModify;
+        }
+
+        /// <summary>
+        /// Applies a data processor to all frames of the animation
+        /// </summary>
+        public async Task<bool> ApplyFrameProcessor(IAsyncDataProcessor<Sprite, int, AnimationFrame> processor, Sprite target, DataScopeKey scopeKey, CancellationToken token = default) {
+            //Start tasks
+            AsyncRef<AnimationFrame>[] frames = new AsyncRef<AnimationFrame>[Frames.Length];
+            Task<bool>[] tasks = new Task<bool>[Frames.Length];
+            for(int i = 0; i < Frames.Length; i++) {
+                frames[i] = new AsyncRef<AnimationFrame>(Frames[i]);
+                tasks[i] = processor.ProcessDataAsync(target, scopeKey, i, frames[i], token);
+            }
+
+            //Wait for tasks
+            await Task.WhenAll(tasks);            
+
+            //Return result
+            bool didModify = false;
+            for(int i = 0; i < Frames.Length; i++) {
+                if(tasks[i].Result) {
+                    didModify = true;
+                    Frames[i] = frames[i].Data;
+                }
+            }
             return didModify;
         }
     }
