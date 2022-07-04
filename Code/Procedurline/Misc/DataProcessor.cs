@@ -55,6 +55,18 @@ namespace Celeste.Mod.Procedurline {
     }
 
     /// <summary>
+    /// Implements an <see cref="IAsyncDataProcessor{T, I, D}" /> wrapping a synchronous <see cref="IDataProcessor{T, I, D}" />
+    /// </summary>
+    public class AsyncProcessorWrapper<T, I, D> : IAsyncDataProcessor<T, I, D> {
+        public readonly IDataProcessor<T, I, D> Processor;
+
+        public AsyncProcessorWrapper(IDataProcessor<T, I, D> processor) => Processor = processor;
+
+        public void RegisterScopes(T target, DataScopeKey key) => Processor.RegisterScopes(target, key);
+        public Task<bool> ProcessDataAsync(T target, DataScopeKey key, I id, AsyncRef<D> data, CancellationToken token = default) => Task.FromResult(Processor.ProcessData(target, key, id, ref data.Data));
+    }
+
+    /// <summary>
     /// Implements functionality shared between <seealso cref="CompositeDataProcessor{T, I, D}" /> and <seealso cref="CompositeAsyncDataProcessor{T, I, D}" />
     /// </summary>
     public abstract class BaseCompositeDataProcessor<C, P, T> : IDataScopeRegistrar<T> where C : BaseCompositeDataProcessor<C, P, T> where P : class, IDataScopeRegistrar<T> {

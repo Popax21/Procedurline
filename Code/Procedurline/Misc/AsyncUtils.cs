@@ -84,5 +84,10 @@ namespace Celeste.Mod.Procedurline {
 
             return taskSrc.Task;
         }
+
+        /// <summary>
+        /// Returns an <see cref="IAsyncDataProcessor{T, I, D}" /> wrapping this <see cref="IDataProcessor{T, I, D}" />
+        /// </summary>
+        public static IAsyncDataProcessor<T, I, D> WrapAsync<T, I, D>(this IDataProcessor<T, I, D> proc) => new AsyncProcessorWrapper<T, I, D>(proc);
     }
 }
