@@ -73,7 +73,7 @@ namespace Celeste.Mod.Procedurline {
 
         /// <summary>
         /// Gets the specific processed animation for the sprite.
-        /// If the processed animation isn't cached, starts an asynchronous processing task, and the original animation is returned in the mean time.
+        /// If the processed animation isn't cached, this starts an asynchronous processing task, and the original animation is returned.
         /// </summary>
         public Sprite.Animation GetAnimation(string animId) {
             lock(ScopeKey.LOCK)

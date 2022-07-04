@@ -42,6 +42,8 @@ namespace Celeste.Mod.Procedurline {
             }
 
             private async Task<bool> ProcessAnimation(Sprite sprite, SpriteAnimationCache.ScopedCache scache, string animId, AsyncRef<Sprite.Animation> animRef, CancellationToken token = default) {
+                token.ThrowIfCancellationRequested();
+
                 try {
                     Stopwatch timer = new Stopwatch();
                     timer.Start();
@@ -302,6 +304,15 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
+        /// Processes the given animation data. Note that you should almost never be calling this yourself, instead use <see cref="GetProcessedAnimation" />
+        /// </summary>
+        public async Task<Sprite.Animation> ProcessAnimation(Sprite sprite, string animId, Sprite.Animation anim, CancellationToken token = default) {
+            AsyncRef<Sprite.Animation> animRef = new AsyncRef<Sprite.Animation>(anim);
+            if(!await AnimationMixer.ProcessDataAsync(sprite, null, animId, animRef, token)) return anim;
+            return animRef.Data;
+        }
+
+        /// <summary>
         /// Returns the sprite's unique identifier.
         /// </summary>
         /// <returns>
@@ -320,7 +331,7 @@ namespace Celeste.Mod.Procedurline {
 
         /// <summary>
         /// Creates a <see cref="ProcessedSprite" /> for the sprite. You are resposible for properly disposing it using <see cref="ProcessedSprite.Dispose" /> once the sprite's not used anymore.
-        /// This method should be used which Procedurline wouldn't pick up as active by itself.
+        /// This method should be used for sprites which Procedurline wouldn't pick up as active by itself.
         /// </summary>
         /// <returns>
         /// <c>null</c> if the sprite can't have / already has an associated processed sprite
@@ -348,6 +359,11 @@ namespace Celeste.Mod.Procedurline {
                 return processedSprites.TryGetValue(sprite, out ProcessedSprite psprite) ? psprite : null;
             }
         }
+
+        /// <summary>
+        /// Gets the dynamically processed version of a sprite's animation, or the original animation if it hasn't been processed yet. This simply proxies to <see cref="ProcessedSprite.GetAnimation" />
+        /// </summary>
+        public Sprite.Animation GetProcessedAnimation(Sprite sprite, string animId) => GetProcessedSprite(sprite)?.GetAnimation(animId) ?? (sprite.Animations.TryGetValue(animId, out Sprite.Animation anim) ? anim : null);
 
         private void RegisterDefaultScopes(Sprite sprite, DataScopeKey key) {
             ProcedurlineModule.GlobalScope.RegisterKey(key);
