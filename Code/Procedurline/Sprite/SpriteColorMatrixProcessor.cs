@@ -22,6 +22,7 @@ namespace Celeste.Mod.Procedurline {
         }
 
         public bool ProcessData(Sprite target, DataScopeKey key, int id, ref SpriteAnimationData.AnimationFrame data) {
+            if(data.TextureData == null) return false;
             data.TextureData.ApplyColorMatrix(ColorMatrix, SaturationThreshold, ValueThreshold);
             return true;
         }
