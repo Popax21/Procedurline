@@ -78,7 +78,7 @@ namespace Celeste.Mod.Procedurline {
         protected virtual Sprite ProcessSprite(Sprite origSprite) {
             if(!RECOLORED_SPRITES.TryGetValue(Color, out Sprite recSprite)) {
                 Matrix colMat = ColorUtils.CalculateRecolorMatrix(RedColor, Color);
-                RECOLORED_SPRITES[Color] = recSprite = new StaticSprite($"customBooster-#{Color.PackedValue:x8}", Sprite, new SpriteColorMatrixProcessor(colMat, 0.05f, 0.05f));
+                RECOLORED_SPRITES[Color] = recSprite = new StaticSprite($"customBooster-#{Color.PackedValue:x8}", origSprite, new SpriteColorMatrixProcessor(colMat, 0.05f, 0.05f));
             }
             return recSprite.Clone();
         }
