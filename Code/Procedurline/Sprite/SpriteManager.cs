@@ -97,7 +97,7 @@ namespace Celeste.Mod.Procedurline {
             AnimationProcessor.AddProcessor(int.MinValue, new DelegateDataProcessor<Sprite, string, SpriteAnimationData>(registerScopes: RegisterDefaultScopes).WrapAsync());
 
             //Install hooks
-            using(new DetourContext(1000000)) {
+            using(new DetourContext(-1000000)) {
                 On.Monocle.Component.Added += ComponentAddedHook;
                 On.Monocle.Component.Removed += ComponentRemovedHook;
                 On.Monocle.Component.EntityAdded += ComponentEntityAddedHook;
