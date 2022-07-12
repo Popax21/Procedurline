@@ -9,6 +9,8 @@ using Monocle;
 
 namespace Celeste.Mod.Procedurline {
     public sealed class ProcedurlineModule : EverestModule {
+        public const int HOOK_PRIO = -1000000;
+
         public static ProcedurlineModule Instance { get; private set; }
         public static string Name => Instance.Metadata.Name;
         public ProcedurlineModule() { Instance = this; }
@@ -47,19 +49,21 @@ namespace Celeste.Mod.Procedurline {
             playerScope = new DataScope("$PLAYER");
 
             //Apply content hooks and patches
-            foreach(Type type in typeof(ProcedurlineModule).Assembly.GetTypes()) {
-                foreach(MethodInfo method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static)) {
-                    if(method.IsStatic) {
-                        if(method.GetCustomAttribute(typeof(ContentHookAttribute)) is ContentHookAttribute hookAttr) {
-                            contentHooks.Add(new Hook(FindMethod(type, hookAttr.HookTargetName), method));
-                        }
+            using(new DetourContext(HOOK_PRIO)) {
+                foreach(Type type in typeof(ProcedurlineModule).Assembly.GetTypes()) {
+                    foreach(MethodInfo method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static)) {
+                        if(method.IsStatic) {
+                            if(method.GetCustomAttribute(typeof(ContentHookAttribute)) is ContentHookAttribute hookAttr) {
+                                contentHooks.Add(new Hook(FindMethod(type, hookAttr.HookTargetName), method));
+                            }
 
-                        if(method.GetCustomAttribute(typeof(ContentILHookAttribute)) is ContentILHookAttribute ilHookAttr) {
-                            contentHooks.Add(new ILHook(FindMethod(type, ilHookAttr.HookTargetName), (ILContext.Manipulator) method.CreateDelegate(typeof(ILContext.Manipulator))));
-                        }
-                    } else {
-                        if(method.GetCustomAttribute(typeof(ContentVirtualizeAttribute)) is ContentVirtualizeAttribute) {
-                            PatchUtils.Virtualize(method, contentHooks);
+                            if(method.GetCustomAttribute(typeof(ContentILHookAttribute)) is ContentILHookAttribute ilHookAttr) {
+                                contentHooks.Add(new ILHook(FindMethod(type, ilHookAttr.HookTargetName), (ILContext.Manipulator) method.CreateDelegate(typeof(ILContext.Manipulator))));
+                            }
+                        } else {
+                            if(method.GetCustomAttribute(typeof(ContentVirtualizeAttribute)) is ContentVirtualizeAttribute) {
+                                PatchUtils.Virtualize(method, contentHooks);
+                            }
                         }
                     }
                 }

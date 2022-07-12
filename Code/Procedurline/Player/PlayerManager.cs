@@ -37,7 +37,7 @@ namespace Celeste.Mod.Procedurline {
             HairColorProcessor.AddProcessor(int.MinValue, new DelegateDataProcessor<Player, VoidBox, PlayerHairColorData>(registerScopes: (_, k) => ProcedurlineModule.PlayerScope.RegisterKey(k)));
             HairNodeProcessor.AddProcessor(int.MinValue, new DelegateDataProcessor<PlayerHair, int, PlayerHairNodeData>(registerScopes: (_, k) => ProcedurlineModule.PlayerScope.RegisterKey(k)));
 
-            using(new DetourContext(-1000000)) {
+            using(new DetourContext(ProcedurlineModule.HOOK_PRIO)) {
                 //Install player sprite hooks
                 On.Celeste.PlayerSprite.ctor += PlayerSpriteCtorHook;
 
