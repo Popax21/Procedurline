@@ -73,7 +73,7 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
-        /// Called when the player touches your refill. Return <c>true</c> if it should break, or <c>false</c> otherwise.
+        /// Called when the player touches your refill. Return <c>true</c> if the default break behaviour should occur, or <c>false</c> otherwise.
         /// </summary>
         protected abstract bool OnTouch(Player player);
 
