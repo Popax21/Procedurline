@@ -50,10 +50,11 @@ namespace Celeste.Mod.Procedurline {
     /// </summary>
     [AttributeUsage(AttributeTargets.Property, AllowMultiple = true)]
     internal sealed class ContentPatchSFXAttribute : Attribute {
-        public readonly string TargetTypeName, TargetMethodName;
+        public readonly string TargetTypeName, InstanceFieldName, TargetMethodName;
 
-        public ContentPatchSFXAttribute(string methodName, string typeName = null) {
+        public ContentPatchSFXAttribute(string methodName, string typeName = null, string instanceFieldName = null) {
             TargetTypeName = typeName;
+            InstanceFieldName = instanceFieldName;
             TargetMethodName = methodName;
         }
     }
