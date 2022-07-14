@@ -71,7 +71,7 @@ namespace Celeste.Mod.Procedurline {
                 foreach(PropertyInfo prop in type.GetProperties(PatchUtils.BindAllInstance)) {
                     foreach(ContentPatchSFXAttribute sfxAttr in prop.GetCustomAttributes(typeof(ContentPatchSFXAttribute)).Cast<ContentPatchSFXAttribute>()) {
                         Type targetType = (sfxAttr.TargetTypeName != null) ? Type.GetType(sfxAttr.TargetTypeName, true, true) : type.BaseType;
-                        targetType.GetMethodRecursive(sfxAttr.TargetMethodName, PatchUtils.BindAll).PatchSFX((sfxAttr.InstanceFieldName != null) ? targetType.GetFieldRecursive(sfxAttr.InstanceFieldName, PatchUtils.BindAll) : null, prop, contentHooks);
+                        targetType.GetMethodRecursive(sfxAttr.TargetMethodName, PatchUtils.BindAll).PatchSFX(prop, contentHooks);
                     }
                 }
             }

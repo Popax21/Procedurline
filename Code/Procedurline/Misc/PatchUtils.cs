@@ -181,18 +181,11 @@ namespace Celeste.Mod.Procedurline {
         /// <summary>
         /// Patches a SFX in a vanilla method, by replacing it with one given by a property at runtime. The property can be virtual, but the base implementation must return the SFX to be replaced.
         /// </summary>
-        public static void PatchSFX(this MethodInfo method, FieldInfo instanceField, PropertyInfo sfxProp, IList<IDetour> hooks) {
-            //Check compatibility
+        public static void PatchSFX(this MethodInfo method, PropertyInfo sfxProp, IList<IDetour> hooks) {
+            //Check property for compatibility
             MethodInfo sfxPropGetter = sfxProp.GetGetMethod(true);
             if(sfxPropGetter == null || sfxPropGetter.IsStatic || sfxProp.PropertyType != typeof(string)) throw new ArgumentException($"Incompatible SFX property {sfxProp}!");
-            if(method.IsStatic) throw new ArgumentException($"Can't patch SFXs in static method {method}!");
-
-            if(instanceField == null) {
-                if(!method.DeclaringType.IsAssignableFrom(sfxProp.DeclaringType)) throw new ArgumentException($"SFX property {sfxProp} in different type than method!");
-            } else {
-                if(!method.DeclaringType.IsAssignableFrom(instanceField.DeclaringType)) throw new ArgumentException($"Instance field {instanceField} in different type than method!");
-                if(!sfxProp.DeclaringType.IsAssignableFrom(instanceField.FieldType)) throw new ArgumentException($"Instance field {instanceField} not of SFX property type!");
-            }
+            if(!method.DeclaringType.IsAssignableFrom(sfxProp.DeclaringType)) throw new ArgumentException($"SFX property {sfxProp} in different type than method!");
 
             //Hook calls to Audio.Play/Loop
             hooks.Add(new ILHook(method, ctx => {
@@ -208,7 +201,6 @@ namespace Celeste.Mod.Procedurline {
 
                     //Check if this is a custom type
                     cursor.Emit(OpCodes.Ldarg_0);
-                    if(instanceField != null) cursor.Emit(OpCodes.Ldfld, instanceField);
                     cursor.Emit(OpCodes.Isinst, sfxProp.DeclaringType);
                     cursor.Emit(OpCodes.Ldnull);
                     cursor.Emit(OpCodes.Cgt_Un);
@@ -228,7 +220,6 @@ namespace Celeste.Mod.Procedurline {
                     cursor.Emit(OpCodes.Dup);
 
                     cursor.Emit(OpCodes.Ldarg_0);
-                    if(instanceField != null) cursor.Emit(OpCodes.Ldfld, instanceField);
                     cursor.Emit(OpCodes.Castclass, sfxProp.DeclaringType);
                     cursor.Emit(OpCodes.Call, sfxPropGetter);
 
@@ -240,7 +231,6 @@ namespace Celeste.Mod.Procedurline {
                     cursor.Emit(OpCodes.Pop);
 
                     cursor.Emit(OpCodes.Ldarg_0);
-                    if(instanceField != null) cursor.Emit(OpCodes.Ldfld, instanceField);
                     cursor.Emit(OpCodes.Castclass, sfxProp.DeclaringType);
                     cursor.Emit(OpCodes.Callvirt, sfxPropGetter);
 
