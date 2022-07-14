@@ -1,37 +1,34 @@
 using System;
-using System.Reflection;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
+
+using Mono.Cecil.Cil;
+using MonoMod.Cil;
+using MonoMod.RuntimeDetour;
 
 namespace Celeste.Mod.Procedurline {
     /// <summary>
     /// Handles global state, hooks, scopes, and other miscellaneous things.
     /// </summary>
     public sealed class GlobalManager : GameComponent {
-        private readonly Action<GameTime> Game_Update;
         private LinkedList<Task> blockingTasks = new LinkedList<Task>();
 
         internal GlobalManager(Game game) : base(game) {
             game.Components.Add(this);
 
-            //Create a delegate for the base Game.Update() method
-            MethodInfo updateMethod = typeof(Game).GetMethod("Update", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            IntPtr updatePtr = updateMethod.MethodHandle.GetFunctionPointer();
-
-            //Sketchy hidden internal delegate constructor (converts a function pointer to a delegate ._.)
-            Game_Update = (Action<GameTime>) Activator.CreateInstance(typeof(Action<GameTime>), game, updatePtr);
-
             //Install hooks
-            On.Monocle.Engine.Update += EngineUpdateHook;
-            On.Monocle.Engine.Draw += EngineDrawHook;
-            On.Monocle.Scene.End += SceneEndHook;
-            On.Celeste.Level.Reload += LevelReloadHook;
+            using(new DetourContext(ProcedurlineModule.HOOK_PRIO)) {
+                IL.Monocle.Engine.Update += EngineUpdateModifier;
+                On.Monocle.Engine.Draw += EngineDrawHook;
+                On.Monocle.Scene.End += SceneEndHook;
+                On.Celeste.Level.Reload += LevelReloadHook;
+            }
         }
 
         protected override void Dispose(bool disposing) {
             //Remove hooks
-            On.Monocle.Engine.Update -= EngineUpdateHook;
+            IL.Monocle.Engine.Update -= EngineUpdateModifier;
             On.Monocle.Engine.Draw -= EngineDrawHook;
 
             Game.Components.Remove(this);
@@ -46,21 +43,37 @@ namespace Celeste.Mod.Procedurline {
             lock(blockingTasks) blockingTasks.AddLast(task);
         }
 
-        private void EngineUpdateHook(On.Monocle.Engine.orig_Update orig, Monocle.Engine engine, GameTime time) {
-            //Check if all blocking tasks have completed
-            lock(blockingTasks) {
-                for(LinkedListNode<Task> node = blockingTasks.First, nnode = node?.Next; node != null; node = nnode, nnode = node?.Next) {
-                    if(node.Value.IsCompleted) {
-                        blockingTasks.Remove(node);
-                    } else {
-                        //Still invoke base.Update()
-                        Game_Update(time);
-                        return;
+        private void EngineUpdateModifier(ILContext ctx) {
+            ILCursor cursor = new ILCursor(ctx);
+
+            cursor.EmitDelegate<Func<bool>>(() => {
+                //Check if all blocking tasks have completed
+                lock(blockingTasks) {
+                    for(LinkedListNode<Task> node = blockingTasks.First, nnode = node?.Next; node != null; node = nnode, nnode = node?.Next) {
+                        if(node.Value.IsCompleted) {
+                            blockingTasks.Remove(node);
+                        } else {
+                            //Invoke base.Update()
+                            return false;
+                        }
                     }
                 }
-            }
 
-            orig(engine, time);
+                //Continue like usual
+                return true;
+            });
+
+            //Check if we should call base.Update
+            ILLabel continueLabel = cursor.DefineLabel();
+            cursor.Emit(OpCodes.Brtrue, continueLabel);
+
+            //Call base.Update()
+            cursor.Emit(OpCodes.Ldarg_0);
+            cursor.Emit(OpCodes.Ldarg_1);
+            cursor.Emit(OpCodes.Call, typeof(Game).GetMethod("Update", PatchUtils.BindAllInstance));
+            cursor.Emit(OpCodes.Ret);
+
+            cursor.MarkLabel(continueLabel);
         }
 
         private void EngineDrawHook(On.Monocle.Engine.orig_Draw orig, Monocle.Engine engine, GameTime time) {
@@ -70,7 +83,8 @@ namespace Celeste.Mod.Procedurline {
                     if(node.Value.IsCompleted) {
                         //Only the update hook removes tasks to avoid edge cases
                     } else {
-                        //Don't render anything at all
+                        //Don't render anything at all, but also don't clear
+                        //This effectively causes a lag frame
                         return;
                     }
                 }

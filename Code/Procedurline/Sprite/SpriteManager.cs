@@ -112,7 +112,7 @@ namespace Celeste.Mod.Procedurline {
                 On.Monocle.Scene.Render += SceneRenderHook;
                 On.Celeste.Level.Render += LevelRenderHook;
 
-                foreach(MethodInfo m in typeof(Sprite).GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)) {
+                foreach(MethodInfo m in typeof(Sprite).GetMethods(PatchUtils.BindAllInstance)) {
                     if(m.DeclaringType != typeof(Sprite)) continue;
 
                     bool didModify = false;
