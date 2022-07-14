@@ -8,7 +8,8 @@ namespace Celeste.Mod.Procedurline {
     internal sealed class ContentHookAttribute : Attribute {
         public readonly string TargetTypeName, TargetMethodName;
 
-        public ContentHookAttribute(string methodName, string typeName = null) {
+        public ContentHookAttribute(string methodName) : this(null, methodName) {}
+        public ContentHookAttribute(string typeName, string methodName) {
             TargetTypeName = typeName;
             TargetMethodName = methodName;
         }
@@ -21,7 +22,8 @@ namespace Celeste.Mod.Procedurline {
     internal sealed class ContentILHookAttribute : Attribute {
         public readonly string TargetTypeName, TargetMethodName;
 
-        public ContentILHookAttribute(string methodName, string typeName = null) {
+        public ContentILHookAttribute(string methodName) : this(null, methodName) {}
+        public ContentILHookAttribute(string typeName, string methodName) {
             TargetTypeName = typeName;
             TargetMethodName = methodName;
         }
