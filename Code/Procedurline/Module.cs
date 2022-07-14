@@ -59,12 +59,18 @@ namespace Celeste.Mod.Procedurline {
                             }
                         }
                     }
+
+                    foreach(PropertyInfo prop in type.GetProperties(PatchUtils.BindAll)) {
+                        if(prop.GetCustomAttribute(typeof(ContentFieldProxyAttribute)) is ContentFieldProxyAttribute proxyAttr) {
+                            prop.MakeFieldProxy(type.GetFieldRecursive(proxyAttr.FieldName, PatchUtils.BindAll), contentHooks);
+                        }
+                    }
                 }
             }
         }
 
         public override void Unload() {
-            //Dispose content patches
+            //Dispose content hooks
             foreach(IDetour hook in contentHooks) hook.Dispose();
             contentHooks.Clear();
 

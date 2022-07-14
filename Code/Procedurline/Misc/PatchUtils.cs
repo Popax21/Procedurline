@@ -13,8 +13,23 @@ namespace Celeste.Mod.Procedurline {
         public const BindingFlags BindAllInstance = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
         public const BindingFlags BindAll = BindAllStatic | BindAllInstance;
 
-        [ThreadStatic]
-        private static bool fromVirtualized = false;
+        [ThreadStatic] private static bool fromVirtualized = false;
+
+        /// <summary>
+        /// Finds a field in this type or any base types recursively.
+        /// </summary>
+        public static FieldInfo GetFieldRecursive(this Type type, string name, BindingFlags flags) {
+            if(type.GetField(name, flags) is FieldInfo info) return info;
+            return type.BaseType?.GetFieldRecursive(name, flags);
+        }
+
+        /// <summary>
+        /// Finds a property in this type or any base types recursively.
+        /// </summary>
+        public static PropertyInfo GetPropertyRecursive(this Type type, string name, BindingFlags flags) {
+             if(type.GetProperty(name, flags) is PropertyInfo info) return info;
+            return type.BaseType?.GetPropertyRecursive(name, flags);
+        }
 
         /// <summary>
         /// Finds a method in this type or any base types recursively.
@@ -30,7 +45,7 @@ namespace Celeste.Mod.Procedurline {
 
         /// <summary>
         /// Virtualizes the given method.
-        /// The method must be hiding a non-virtual method in the base class and have an empty/NOP body.
+        /// The method must be hiding a non-virtual method in the base class and have an empty/NOP body, if the base method should still be invoked.
         /// After being patched, child classes overriding the class can call the original method by calling the base method, and their virtual method is called instead of the hidden method.
         /// </summary>
         public static void Virtualize(this MethodInfo method, bool callBase, IList<IDetour> hooks) {
@@ -101,6 +116,55 @@ namespace Celeste.Mod.Procedurline {
                         HandlerStart = tryEnd.Target,
                         HandlerEnd = finallyEnd.Target
                     });
+                }));
+            }
+        }
+
+        /// <summary>
+        /// Makes the property a field proxy. After patching, the property will proxy the given field instead of the compiler generate backing field.
+        /// </summary>
+        public static void MakeFieldProxy(this PropertyInfo prop, FieldInfo field, IList<IDetour> hooks) {
+            //Check field for compatibility
+            if(prop.GetAccessors(true).Any(a => a.IsStatic != field.IsStatic) || prop.PropertyType != field.FieldType) throw new ArgumentException("Mismatching field and property types!");
+            if(!field.DeclaringType.IsAssignableFrom(prop.DeclaringType)) throw new ArgumentException("Property in different type than field!");
+
+            //Hook getter
+            if(prop.CanRead) {
+                hooks.Add(new ILHook(prop.GetGetMethod(true), ctx => {
+                    //Rip out the entire method body
+                    ctx.Body.Instructions.Clear();
+
+                    ILCursor cursor = new ILCursor(ctx);
+
+                    //Get the field value
+                    cursor.EmitReference(field);
+                    if(field.IsStatic) cursor.Emit(OpCodes.Ldnull);
+                    else cursor.Emit(OpCodes.Ldarg_0);
+                    cursor.Emit(OpCodes.Call, typeof(FieldInfo).GetMethod(nameof(FieldInfo.GetValue)));
+                    cursor.Emit(OpCodes.Castclass, field.DeclaringType);
+                    cursor.Emit(OpCodes.Ret);
+                }));
+            }
+
+            //Hook setter
+            if(prop.CanWrite) {
+                hooks.Add(new ILHook(prop.GetSetMethod(true), ctx => {
+                    //Rip out the entire method body
+                    ctx.Body.Instructions.Clear();
+
+                    ILCursor cursor = new ILCursor(ctx);
+
+                    //Set the field value
+                    cursor.EmitReference(field);
+                    if(field.IsStatic) {
+                        cursor.Emit(OpCodes.Ldnull);
+                        cursor.Emit(OpCodes.Ldarg_0);
+                    } else {
+                        cursor.Emit(OpCodes.Ldarg_0);
+                        cursor.Emit(OpCodes.Ldarg_1);
+                    }
+                    cursor.Emit(OpCodes.Call, typeof(FieldInfo).GetMethod(nameof(FieldInfo.SetValue)));
+                    cursor.Emit(OpCodes.Ret);
                 }));
             }
         }
