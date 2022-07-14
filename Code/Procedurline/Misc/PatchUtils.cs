@@ -195,7 +195,7 @@ namespace Celeste.Mod.Procedurline {
 
                 ILCursor cursor = new ILCursor(ctx);
                 bool didPatch = false;
-                while(!cursor.TryGotoNext(i => i.MatchCall(out MethodReference m) && m.DeclaringType.FullName == "Celeste.Audio" && (m.Name == "Play" || m.Name == "Loop"))) {
+                while(cursor.TryGotoNext(i => i.MatchCall(out MethodReference m) && m.DeclaringType.FullName == "Celeste.Audio" && (m.Name == "Play" || m.Name == "Loop"))) {
                     ILLabel restoreArgs = cursor.DefineLabel(), playSfx = cursor.DefineLabel(), afterPlaySfx = cursor.DefineLabel();
                     MethodReference playMethod = (MethodReference) cursor.Instrs[cursor.Index].Operand;
 
