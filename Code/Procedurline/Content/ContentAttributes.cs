@@ -20,5 +20,8 @@ namespace Celeste.Mod.Procedurline {
     /// <summary>
     /// Marks this content method for virtualization using <see cref="PatchUtils.Virtualize" />
     /// </summary>
-    internal sealed class ContentVirtualizeAttribute : Attribute {}
+    internal sealed class ContentVirtualizeAttribute : Attribute {
+        public readonly bool CallBase;
+        public ContentVirtualizeAttribute(bool callBase = true) => CallBase = callBase;
+    }
 }

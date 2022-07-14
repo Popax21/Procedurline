@@ -33,7 +33,7 @@ namespace Celeste.Mod.Procedurline {
         /// The method must be hiding a non-virtual method in the base class and have an empty/NOP body.
         /// After being patched, child classes overriding the class can call the original method by calling the base method, and their virtual method is called instead of the hidden method.
         /// </summary>
-        public static void Virtualize(this MethodInfo method, IList<IDetour> hooks) {
+        public static void Virtualize(this MethodInfo method, bool callBase, IList<IDetour> hooks) {
             if(method.IsStatic) throw new ArgumentException("Can't virtualize a static method!");
 
             //Get the hidden base method
@@ -70,37 +70,39 @@ namespace Celeste.Mod.Procedurline {
                 cursor.MarkLabel(notDeclareType);
             }));
 
-            //Install virtual method hook
-            hooks.Add(new ILHook(method, ctx => {
-                ILCursor cursor = new ILCursor(ctx);
-                FieldInfo fromVirtualizedField = typeof(PatchUtils).GetField(nameof(fromVirtualized), BindingFlags.NonPublic | BindingFlags.Static);
-                ILLabel tryStart = cursor.DefineLabel(), tryEnd = cursor.DefineLabel(), finallyEnd = cursor.DefineLabel();
+            if(callBase) {
+                //Install virtual method hook
+                hooks.Add(new ILHook(method, ctx => {
+                    ILCursor cursor = new ILCursor(ctx);
+                    FieldInfo fromVirtualizedField = typeof(PatchUtils).GetField(nameof(fromVirtualized), BindingFlags.NonPublic | BindingFlags.Static);
+                    ILLabel tryStart = cursor.DefineLabel(), tryEnd = cursor.DefineLabel(), finallyEnd = cursor.DefineLabel();
 
-                //Call the base method
-                cursor.MarkLabel(tryStart);
-                cursor.Emit(OpCodes.Ldc_I4_1);
-                cursor.Emit(OpCodes.Stsfld, fromVirtualizedField);
+                    //Call the base method
+                    cursor.MarkLabel(tryStart);
+                    cursor.Emit(OpCodes.Ldc_I4_1);
+                    cursor.Emit(OpCodes.Stsfld, fromVirtualizedField);
 
-                cursor.Emit(OpCodes.Ldarg_0);
-                cursor.Emit(OpCodes.Castclass, hiddenMethod.DeclaringType);
-                for(int i = 0; i < parameters.Length; i++) cursor.Emit(OpCodes.Ldarg, 1+i);
-                cursor.Emit(OpCodes.Callvirt, hiddenMethod);
-                cursor.Emit(OpCodes.Ret);
-                cursor.MarkLabel(tryEnd);
+                    cursor.Emit(OpCodes.Ldarg_0);
+                    cursor.Emit(OpCodes.Castclass, hiddenMethod.DeclaringType);
+                    for(int i = 0; i < parameters.Length; i++) cursor.Emit(OpCodes.Ldarg, 1+i);
+                    cursor.Emit(OpCodes.Callvirt, hiddenMethod);
+                    cursor.Emit(OpCodes.Ret);
+                    cursor.MarkLabel(tryEnd);
 
-                //Finally block
-                cursor.Emit(OpCodes.Ldc_I4_0);
-                cursor.Emit(OpCodes.Stsfld, fromVirtualizedField);
-                cursor.Emit(OpCodes.Ret);
-                cursor.MarkLabel(finallyEnd);
+                    //Finally block
+                    cursor.Emit(OpCodes.Ldc_I4_0);
+                    cursor.Emit(OpCodes.Stsfld, fromVirtualizedField);
+                    cursor.Emit(OpCodes.Ret);
+                    cursor.MarkLabel(finallyEnd);
 
-                ctx.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Finally) {
-                    TryStart = tryStart.Target,
-                    TryEnd = tryEnd.Target,
-                    HandlerStart = tryEnd.Target,
-                    HandlerEnd = finallyEnd.Target
-                });
-            }));
+                    ctx.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Finally) {
+                        TryStart = tryStart.Target,
+                        TryEnd = tryEnd.Target,
+                        HandlerStart = tryEnd.Target,
+                        HandlerEnd = finallyEnd.Target
+                    });
+                }));
+            }
         }
     }
 }

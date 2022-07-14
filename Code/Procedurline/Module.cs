@@ -54,8 +54,8 @@ namespace Celeste.Mod.Procedurline {
                                 contentHooks.Add(new ILHook(type.GetMethodRecursive(ilHookAttr.HookTargetName, PatchUtils.BindAll), (ILContext.Manipulator) method.CreateDelegate(typeof(ILContext.Manipulator))));
                             }
                         } else {
-                            if(method.GetCustomAttribute(typeof(ContentVirtualizeAttribute)) is ContentVirtualizeAttribute) {
-                                method.Virtualize(contentHooks);
+                            if(method.GetCustomAttribute(typeof(ContentVirtualizeAttribute)) is ContentVirtualizeAttribute virtAttr) {
+                                method.Virtualize(virtAttr.CallBase, contentHooks);
                             }
                         }
                     }
