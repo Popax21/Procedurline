@@ -94,7 +94,7 @@ namespace Celeste.Mod.Procedurline {
             AnimationMixer.AddProcessor(0, AnimationCache);
 
             //Register default scope registrar
-            AnimationProcessor.AddProcessor(int.MinValue, new DelegateDataProcessor<Sprite, string, SpriteAnimationData>(registerScopes: RegisterDefaultScopes).WrapAsync());
+            AnimationMixer.AddProcessor(int.MinValue, new DelegateDataProcessor<Sprite, string, Sprite.Animation>(registerScopes: RegisterDefaultScopes).WrapAsync());
 
             //Install hooks
             using(new DetourContext(ProcedurlineModule.HOOK_PRIO)) {
@@ -451,6 +451,7 @@ namespace Celeste.Mod.Procedurline {
             Sprite sprt = orig(bank, sprite, id);
             spriteIds.Remove(sprt);
             spriteIds.Add(sprt, id);
+            GetProcessedSprite(sprt)?.ResetCache();
             return sprt;
         }
 
