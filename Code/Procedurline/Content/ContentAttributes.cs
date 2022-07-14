@@ -6,8 +6,12 @@ namespace Celeste.Mod.Procedurline {
     /// </summary>
     [AttributeUsage(AttributeTargets.Method)]
     internal sealed class ContentHookAttribute : Attribute {
-        public readonly string HookTargetName;
-        public ContentHookAttribute(string targetName) => HookTargetName = targetName;
+        public readonly string TargetTypeName, TargetMethodName;
+
+        public ContentHookAttribute(string methodName, string typeName = null) {
+            TargetTypeName = typeName;
+            TargetMethodName = methodName;
+        }
     }
 
     /// <summary>
@@ -15,8 +19,12 @@ namespace Celeste.Mod.Procedurline {
     /// </summary>
     [AttributeUsage(AttributeTargets.Method)]
     internal sealed class ContentILHookAttribute : Attribute {
-        public readonly string HookTargetName;
-        public ContentILHookAttribute(string targetName) => HookTargetName = targetName;
+        public readonly string TargetTypeName, TargetMethodName;
+
+        public ContentILHookAttribute(string methodName, string typeName = null) {
+            TargetTypeName = typeName;
+            TargetMethodName = methodName;
+        }
     }
 
     /// <summary>
@@ -42,7 +50,11 @@ namespace Celeste.Mod.Procedurline {
     /// </summary>
     [AttributeUsage(AttributeTargets.Property, AllowMultiple = true)]
     internal sealed class ContentPatchSFXAttribute : Attribute {
-        public readonly string TargetMethodName;
-        public ContentPatchSFXAttribute(string methodName) => TargetMethodName = methodName;
+        public readonly string TargetTypeName, TargetMethodName;
+
+        public ContentPatchSFXAttribute(string methodName, string typeName = null) {
+            TargetTypeName = typeName;
+            TargetMethodName = methodName;
+        }
     }
 }
