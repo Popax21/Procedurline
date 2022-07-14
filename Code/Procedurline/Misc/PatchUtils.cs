@@ -235,7 +235,7 @@ namespace Celeste.Mod.Procedurline {
 
                     //Restore extra arguments
                     cursor.MarkLabel(restoreArgs);
-                    for(int i = 1; i < playMethod.Parameters.Count; i--) {
+                    for(int i = 1; i < playMethod.Parameters.Count; i++) {
                         cursor.Emit(OpCodes.Ldloc, argLocals[playMethod.Parameters[i].Name]);
                     }
 
