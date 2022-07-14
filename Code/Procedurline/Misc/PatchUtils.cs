@@ -131,7 +131,7 @@ namespace Celeste.Mod.Procedurline {
         /// </summary>
         public static void PatchFieldProxy(this PropertyInfo prop, FieldInfo field, IList<IDetour> hooks) {
             //Check field for compatibility
-            if(prop.GetAccessors(true).Any(a => a.IsStatic != field.IsStatic) || prop.PropertyType != field.FieldType) throw new ArgumentException($"Mismatching field {field} and property {prop} types!");
+            if(prop.GetAccessors(true).Any(a => a.IsStatic != field.IsStatic) || prop.PropertyType.IsAssignableFrom(field.FieldType)) new ArgumentException($"Mismatching field {field} and property {prop} types!");
             if(!field.DeclaringType.IsAssignableFrom(prop.DeclaringType)) throw new ArgumentException($"Property {prop} in different type than field!");
 
             //Hook getter
@@ -147,8 +147,8 @@ namespace Celeste.Mod.Procedurline {
                     if(field.IsStatic) cursor.Emit(OpCodes.Ldnull);
                     else cursor.Emit(OpCodes.Ldarg_0);
                     cursor.Emit(OpCodes.Call, typeof(FieldInfo).GetMethod(nameof(FieldInfo.GetValue), new Type[] { typeof(object) }));
-                    if(field.FieldType.IsPrimitive) cursor.Emit(OpCodes.Unbox_Any, field.FieldType);
-                    else cursor.Emit(OpCodes.Castclass, field.FieldType);
+                    cursor.Emit(OpCodes.Castclass, prop.PropertyType);
+                    if(field.FieldType.IsPrimitive) cursor.Emit(OpCodes.Unbox_Any, prop.PropertyType);
                     cursor.Emit(OpCodes.Ret);
                 }));
             }
@@ -170,7 +170,8 @@ namespace Celeste.Mod.Procedurline {
                         cursor.Emit(OpCodes.Ldarg_0);
                         cursor.Emit(OpCodes.Ldarg_1);
                     }
-                    if(field.FieldType.IsPrimitive) cursor.Emit(OpCodes.Box, field.FieldType);
+                    if(field.FieldType.IsPrimitive) cursor.Emit(OpCodes.Box, prop.PropertyType);
+                    cursor.Emit(OpCodes.Castclass, field.FieldType);
                     cursor.Emit(OpCodes.Call, typeof(FieldInfo).GetMethod(nameof(FieldInfo.SetValue), new Type[] { typeof(object), typeof(object) }));
                     cursor.Emit(OpCodes.Ret);
                 }));
