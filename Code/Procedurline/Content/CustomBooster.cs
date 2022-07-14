@@ -66,9 +66,7 @@ namespace Celeste.Mod.Procedurline {
                 else player.RedBoost(this);
             }
 
-            string sfx = EnterSFX;
-            if(sfx != null) Audio.Play(sfx, Position);
-
+            Audio.Play(EnterSFX, Position);
             Components.Get<Wiggler>().Start();
             Sprite.Play("inside");
             Sprite.FlipX = (player.Facing == Facings.Left);

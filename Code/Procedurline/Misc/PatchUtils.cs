@@ -196,7 +196,7 @@ namespace Celeste.Mod.Procedurline {
                 ILCursor cursor = new ILCursor(ctx);
                 bool didPatch = false;
                 while(cursor.TryGotoNext(i => i.MatchCall(out MethodReference m) && m.DeclaringType.FullName == "Celeste.Audio" && (m.Name == "Play" || m.Name == "Loop"))) {
-                    ILLabel restoreArgs = cursor.DefineLabel(), playSfx = cursor.DefineLabel(), afterPlaySfx = cursor.DefineLabel();
+                    ILLabel restoreArgs = cursor.DefineLabel(), playSfx = cursor.DefineLabel();
                     MethodReference playMethod = (MethodReference) cursor.Instrs[cursor.Index].Operand;
 
                     //Check if this is a custom type
@@ -227,17 +227,11 @@ namespace Celeste.Mod.Procedurline {
                     cursor.Emit(OpCodes.Brfalse, restoreArgs);
 
                     //Replace the SFX to be played with the SFX property's *actual* value
-                    //If it's null, don't play a SFX at all
                     cursor.Emit(OpCodes.Pop);
 
                     cursor.Emit(OpCodes.Ldarg_0);
                     cursor.Emit(OpCodes.Castclass, sfxProp.DeclaringType);
                     cursor.Emit(OpCodes.Callvirt, sfxPropGetter);
-
-                    cursor.Emit(OpCodes.Dup);
-                    cursor.Emit(OpCodes.Ldnull);
-                    cursor.Emit(OpCodes.Cgt_Un);
-                    cursor.Emit(OpCodes.Brfalse, afterPlaySfx);
 
                     //Restore extra arguments
                     cursor.MarkLabel(restoreArgs);
@@ -246,8 +240,6 @@ namespace Celeste.Mod.Procedurline {
                     }
 
                     cursor.MarkLabel(playSfx);
-                    cursor.Index++;
-                    cursor.MarkLabel(afterPlaySfx);
 
                     didPatch = true;
                 }

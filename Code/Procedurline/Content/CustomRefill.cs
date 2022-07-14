@@ -56,14 +56,11 @@ namespace Celeste.Mod.Procedurline {
             return recSprite.Clone();
         }
 
-
         /// <summary>
         /// Breaks the refill.
         /// </summary>
         protected virtual void Break(Player player, float? respawnDelay = VanillaRespawnDelay) {
-            string sfx = CollectSFX;
-            if(sfx != null) Audio.Play(sfx, Position);
-
+            Audio.Play(CollectSFX, Position);
             Input.Rumble(RumbleStrength.Medium, RumbleLength.Medium);
 
             Collidable = false;
