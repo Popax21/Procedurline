@@ -77,8 +77,9 @@ namespace Celeste.Mod.Procedurline {
         /// <summary>
         /// Make the player exit the booster.
         /// </summary>
-        protected virtual void MakePlayerExit(Player player) {
-
+        protected virtual void MakePlayerExit(Player player, int newState = Player.StNormal) {
+            if(player.CurrentBooster != this || player.StateMachine.State != Player.StBoost || player.StateMachine.State != Player.StDash || player.StateMachine.State != Player.StRedDash) return;
+            player.StateMachine.State = newState;
         }
 
         /// <summary>
