@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Reflection;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
@@ -44,25 +45,31 @@ namespace Celeste.Mod.Procedurline {
             //Apply content hooks and patches
             using(new DetourContext(HOOK_PRIO)) {
                 foreach(Type type in typeof(ProcedurlineModule).Assembly.GetTypes()) {
-                    foreach(MethodInfo method in type.GetMethods(PatchUtils.BindAll)) {
-                        if(method.IsStatic) {
-                            if(method.GetCustomAttribute(typeof(ContentHookAttribute)) is ContentHookAttribute hookAttr) {
-                                contentHooks.Add(new Hook(type.GetMethodRecursive(hookAttr.HookTargetName, PatchUtils.BindAll), method));
-                            }
+                    foreach(MethodInfo method in type.GetMethods(PatchUtils.BindAllStatic)) {
+                        if(method.GetCustomAttribute(typeof(ContentHookAttribute)) is ContentHookAttribute hookAttr) {
+                            contentHooks.Add(new Hook(type.GetMethodRecursive(hookAttr.HookTargetName, PatchUtils.BindAll), method));
+                        }
 
-                            if(method.GetCustomAttribute(typeof(ContentILHookAttribute)) is ContentILHookAttribute ilHookAttr) {
-                                contentHooks.Add(new ILHook(type.GetMethodRecursive(ilHookAttr.HookTargetName, PatchUtils.BindAll), (ILContext.Manipulator) method.CreateDelegate(typeof(ILContext.Manipulator))));
-                            }
-                        } else {
-                            if(method.GetCustomAttribute(typeof(ContentVirtualizeAttribute)) is ContentVirtualizeAttribute virtAttr) {
-                                method.Virtualize(virtAttr.CallBase, contentHooks);
-                            }
+                        if(method.GetCustomAttribute(typeof(ContentILHookAttribute)) is ContentILHookAttribute ilHookAttr) {
+                            contentHooks.Add(new ILHook(type.GetMethodRecursive(ilHookAttr.HookTargetName, PatchUtils.BindAll), (ILContext.Manipulator) method.CreateDelegate(typeof(ILContext.Manipulator))));
+                        }
+                    }
+
+                    foreach(MethodInfo method in type.GetMethods(PatchUtils.BindAllInstance)) {
+                        if(method.GetCustomAttribute(typeof(ContentVirtualizeAttribute)) is ContentVirtualizeAttribute virtAttr) {
+                            method.Virtualize(virtAttr.CallBase, contentHooks);
                         }
                     }
 
                     foreach(PropertyInfo prop in type.GetProperties(PatchUtils.BindAll)) {
                         if(prop.GetCustomAttribute(typeof(ContentFieldProxyAttribute)) is ContentFieldProxyAttribute proxyAttr) {
-                            prop.MakeFieldProxy(type.GetFieldRecursive(proxyAttr.FieldName, PatchUtils.BindAll), contentHooks);
+                            prop.PatchFieldProxy(type.GetFieldRecursive(proxyAttr.TargetFieldName, PatchUtils.BindAll), contentHooks);
+                        }
+                    }
+
+                    foreach(PropertyInfo prop in type.GetProperties(PatchUtils.BindAllInstance)) {
+                        foreach(ContentPatchSFXAttribute sfxAttr in prop.GetCustomAttributes(typeof(ContentPatchSFXAttribute)).Cast<ContentPatchSFXAttribute>()) {
+                            type.BaseType.GetMethodRecursive(sfxAttr.TargetMethodName, PatchUtils.BindAll).PatchSFX(prop, contentHooks);
                         }
                     }
                 }

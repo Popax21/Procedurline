@@ -3,6 +3,7 @@ using System.Linq;
 using System.Reflection;
 using System.Collections.Generic;
 
+using Mono.Cecil;
 using Mono.Cecil.Cil;
 using MonoMod.Cil;
 using MonoMod.RuntimeDetour;
@@ -49,16 +50,17 @@ namespace Celeste.Mod.Procedurline {
         /// After being patched, child classes overriding the class can call the original method by calling the base method, and their virtual method is called instead of the hidden method.
         /// </summary>
         public static void Virtualize(this MethodInfo method, bool callBase, IList<IDetour> hooks) {
-            if(method.IsStatic) throw new ArgumentException("Can't virtualize a static method!");
+            if(method.IsStatic) throw new ArgumentException($"Can't virtualize static method {method}!");
 
             //Get the hidden base method
             Type[] parameters = method.GetParameters().Select(p => p.ParameterType).ToArray();
             MethodInfo hiddenMethod = method.DeclaringType.BaseType.GetMethodRecursive(method.Name, BindAllInstance, parameters);
+            if(!hiddenMethod.GetParameters().Select(p => p.ParameterType).SequenceEqual(parameters) || hiddenMethod.ReturnParameter.ParameterType != method.ReturnParameter.ParameterType) throw new ArgumentException($"Method {method} has different parameters than base method {hiddenMethod}");
 
             //Install base method hook
             hooks.Add(new ILHook(hiddenMethod, ctx => {
                 ILCursor cursor = new ILCursor(ctx);
-                ILLabel notDeclareType = cursor.DefineLabel();
+                ILLabel callOrig = cursor.DefineLabel();
                 FieldInfo fromVirtualizedField = typeof(PatchUtils).GetField(nameof(fromVirtualized), BindingFlags.NonPublic | BindingFlags.Static);
 
                 //Check if the object is the declaring type
@@ -66,23 +68,22 @@ namespace Celeste.Mod.Procedurline {
                 cursor.Emit(OpCodes.Isinst, method.DeclaringType);
                 cursor.Emit(OpCodes.Ldnull);
                 cursor.Emit(OpCodes.Cgt_Un);
-                cursor.Emit(OpCodes.Neg);
-                cursor.Emit(OpCodes.Ldsfld, fromVirtualizedField);
-                cursor.Emit(OpCodes.Neg);
-                cursor.Emit(OpCodes.And);
-                cursor.Emit(OpCodes.Brfalse, notDeclareType);
+                cursor.Emit(OpCodes.Brfalse, callOrig);
 
-                //Call the virtual method
+                //Check if we're coming from the virtual method, and reset the field afterwards
+                cursor.Emit(OpCodes.Ldsfld, fromVirtualizedField);
                 cursor.Emit(OpCodes.Ldc_I4_0);
                 cursor.Emit(OpCodes.Stsfld, fromVirtualizedField);
+                cursor.Emit(OpCodes.Brtrue, callOrig);
 
+                //Call the virtual method
                 cursor.Emit(OpCodes.Ldarg_0);
                 cursor.Emit(OpCodes.Castclass, method.DeclaringType);
                 for(int i = 0; i < parameters.Length; i++) cursor.Emit(OpCodes.Ldarg, 1+i);
                 cursor.Emit(OpCodes.Callvirt, method);
                 cursor.Emit(OpCodes.Ret);
 
-                cursor.MarkLabel(notDeclareType);
+                cursor.MarkLabel(callOrig);
             }));
 
             if(callBase) {
@@ -92,24 +93,29 @@ namespace Celeste.Mod.Procedurline {
                     FieldInfo fromVirtualizedField = typeof(PatchUtils).GetField(nameof(fromVirtualized), BindingFlags.NonPublic | BindingFlags.Static);
                     ILLabel tryStart = cursor.DefineLabel(), tryEnd = cursor.DefineLabel(), finallyEnd = cursor.DefineLabel();
 
-                    //Call the base method
                     cursor.MarkLabel(tryStart);
+
+                    //Set "from virtual method" flag
                     cursor.Emit(OpCodes.Ldc_I4_1);
                     cursor.Emit(OpCodes.Stsfld, fromVirtualizedField);
 
+                    //Call the base method
                     cursor.Emit(OpCodes.Ldarg_0);
                     cursor.Emit(OpCodes.Castclass, hiddenMethod.DeclaringType);
                     for(int i = 0; i < parameters.Length; i++) cursor.Emit(OpCodes.Ldarg, 1+i);
                     cursor.Emit(OpCodes.Callvirt, hiddenMethod);
                     cursor.Emit(OpCodes.Ret);
+
                     cursor.MarkLabel(tryEnd);
 
                     //Finally block
                     cursor.Emit(OpCodes.Ldc_I4_0);
                     cursor.Emit(OpCodes.Stsfld, fromVirtualizedField);
-                    cursor.Emit(OpCodes.Ret);
+                    cursor.Emit(OpCodes.Endfinally);
+
                     cursor.MarkLabel(finallyEnd);
 
+                    //Register finally block
                     ctx.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Finally) {
                         TryStart = tryStart.Target,
                         TryEnd = tryEnd.Target,
@@ -121,16 +127,16 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
-        /// Makes the property a field proxy. After patching, the property will proxy the given field instead of the compiler generate backing field.
+        /// Patches the property to bea field proxy. After patching, the property will proxy the given (private) field.
         /// </summary>
-        public static void MakeFieldProxy(this PropertyInfo prop, FieldInfo field, IList<IDetour> hooks) {
+        public static void PatchFieldProxy(this PropertyInfo prop, FieldInfo field, IList<IDetour> hooks) {
             //Check field for compatibility
-            if(prop.GetAccessors(true).Any(a => a.IsStatic != field.IsStatic) || prop.PropertyType != field.FieldType) throw new ArgumentException("Mismatching field and property types!");
-            if(!field.DeclaringType.IsAssignableFrom(prop.DeclaringType)) throw new ArgumentException("Property in different type than field!");
+            if(prop.GetAccessors(true).Any(a => a.IsStatic != field.IsStatic) || prop.PropertyType != field.FieldType) throw new ArgumentException($"Mismatching field {field} and property {prop} types!");
+            if(!field.DeclaringType.IsAssignableFrom(prop.DeclaringType)) throw new ArgumentException($"Property {prop} in different type than field!");
 
             //Hook getter
-            if(prop.CanRead) {
-                hooks.Add(new ILHook(prop.GetGetMethod(true), ctx => {
+            if(prop.GetGetMethod(true) is MethodInfo getter) {
+                hooks.Add(new ILHook(getter, ctx => {
                     //Rip out the entire method body
                     ctx.Body.Instructions.Clear();
 
@@ -140,15 +146,16 @@ namespace Celeste.Mod.Procedurline {
                     cursor.EmitReference(field);
                     if(field.IsStatic) cursor.Emit(OpCodes.Ldnull);
                     else cursor.Emit(OpCodes.Ldarg_0);
-                    cursor.Emit(OpCodes.Call, typeof(FieldInfo).GetMethod(nameof(FieldInfo.GetValue)));
-                    cursor.Emit(OpCodes.Castclass, field.DeclaringType);
+                    cursor.Emit(OpCodes.Call, typeof(FieldInfo).GetMethod(nameof(FieldInfo.GetValue), new Type[] { typeof(object) }));
+                    if(field.FieldType.IsPrimitive) cursor.Emit(OpCodes.Unbox_Any, field.FieldType);
+                    else cursor.Emit(OpCodes.Castclass, field.FieldType);
                     cursor.Emit(OpCodes.Ret);
                 }));
             }
 
             //Hook setter
-            if(prop.CanWrite) {
-                hooks.Add(new ILHook(prop.GetSetMethod(true), ctx => {
+            if(prop.GetSetMethod(true) is MethodInfo setter) {
+                hooks.Add(new ILHook(setter, ctx => {
                     //Rip out the entire method body
                     ctx.Body.Instructions.Clear();
 
@@ -163,10 +170,81 @@ namespace Celeste.Mod.Procedurline {
                         cursor.Emit(OpCodes.Ldarg_0);
                         cursor.Emit(OpCodes.Ldarg_1);
                     }
-                    cursor.Emit(OpCodes.Call, typeof(FieldInfo).GetMethod(nameof(FieldInfo.SetValue)));
+                    if(field.FieldType.IsPrimitive) cursor.Emit(OpCodes.Box, field.FieldType);
+                    cursor.Emit(OpCodes.Call, typeof(FieldInfo).GetMethod(nameof(FieldInfo.SetValue), new Type[] { typeof(object), typeof(object) }));
                     cursor.Emit(OpCodes.Ret);
                 }));
             }
+        }
+
+        /// <summary>
+        /// Patches a SFX in a vanilla method, by replacing it with one given by a property at runtime. The property can be virtual, but the base implementation must return the SFX to be replaced.
+        /// </summary>
+        public static void PatchSFX(this MethodInfo method, PropertyInfo sfxProp, IList<IDetour> hooks) {
+            //Check property for compatibility
+            MethodInfo sfxPropGetter = sfxProp.GetGetMethod(true);
+            if(sfxPropGetter == null || sfxPropGetter.IsStatic || sfxProp.PropertyType != typeof(string)) throw new ArgumentException($"Incompatible SFX property {sfxProp}!");
+            if(!method.DeclaringType.IsAssignableFrom(sfxProp.DeclaringType)) throw new ArgumentException($"SFX property {sfxProp} in different type than method!");
+
+            //Hook calls to Audio.Play/Loop
+            hooks.Add(new ILHook(method, ctx => {
+                MethodInfo stringComp = typeof(string).GetMethod(nameof(string.Equals), new Type[] { typeof(string) });
+
+                Dictionary<string, VariableDefinition> argLocals = new Dictionary<string, VariableDefinition>(StringComparer.OrdinalIgnoreCase);
+
+                ILCursor cursor = new ILCursor(ctx);
+                bool didPatch = false;
+                while(!cursor.TryGotoNext(i => i.MatchCall(out MethodReference m) && m.DeclaringType.FullName == "Celeste.Audio" && (m.Name == "Play" || m.Name == "Loop"))) {
+                    ILLabel playSfx = cursor.DefineLabel(), restoreArgs = cursor.DefineLabel();
+                    MethodReference playMethod = (MethodReference) cursor.Instrs[cursor.Index].Operand;
+
+                    //Check if this is a custom type
+                    cursor.Emit(OpCodes.Ldarg_0);
+                    cursor.Emit(OpCodes.Isinst, sfxProp.DeclaringType);
+                    cursor.Emit(OpCodes.Ldnull);
+                    cursor.Emit(OpCodes.Cgt_Un);
+                    cursor.Emit(OpCodes.Brfalse, playSfx);
+
+                    //Save extra arguments
+                    for(int i = playMethod.Parameters.Count - 1; i >= 1; i--) {
+                        ParameterDefinition param = playMethod.Parameters[i];
+                        if(!argLocals.TryGetValue(param.Name, out VariableDefinition var)) {
+                            ctx.Body.Variables.Add(var = new VariableDefinition(param.ParameterType));
+                            argLocals.Add(param.Name, var);
+                        }
+                        cursor.Emit(OpCodes.Stloc, var);
+                    }
+
+                    //Get the SFX property's *base* value and compare it to the sound effect about to play
+                    cursor.Emit(OpCodes.Dup);
+
+                    cursor.Emit(OpCodes.Ldarg_0);
+                    cursor.Emit(OpCodes.Castclass, sfxProp.DeclaringType);
+                    cursor.Emit(OpCodes.Call, sfxPropGetter);
+
+                    cursor.Emit(OpCodes.Call, stringComp);
+                    cursor.Emit(OpCodes.Brfalse, restoreArgs);
+
+                    //Replace the SFX to be played with the SFX property's *actual* value
+                    cursor.Emit(OpCodes.Pop);
+
+                    cursor.Emit(OpCodes.Ldarg_0);
+                    cursor.Emit(OpCodes.Castclass, sfxProp.DeclaringType);
+                    cursor.Emit(OpCodes.Callvirt, sfxPropGetter);
+
+                    //Restore extra arguments
+                    cursor.MarkLabel(restoreArgs);
+                    for(int i = 1; i < playMethod.Parameters.Count; i--) {
+                        cursor.Emit(OpCodes.Ldloc, argLocals[playMethod.Parameters[i].Name]);
+                    }
+
+                    cursor.MarkLabel(playSfx);
+
+                    didPatch = true;
+                }
+
+                if(!didPatch) Logger.Log(ProcedurlineModule.Name, $"PatchSFX: Found no Audio.Play calls to patch!");
+            }));
         }
     }
 }
