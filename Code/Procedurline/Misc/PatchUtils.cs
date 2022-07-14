@@ -9,21 +9,36 @@ using MonoMod.RuntimeDetour;
 
 namespace Celeste.Mod.Procedurline {
     public static class PatchUtils {
+        public const BindingFlags BindAllStatic = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
+        public const BindingFlags BindAllInstance = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+        public const BindingFlags BindAll = BindAllStatic | BindAllInstance;
+
         [ThreadStatic]
         private static bool fromVirtualized = false;
+
+        /// <summary>
+        /// Finds a method in this type or any base types recursively.
+        /// </summary>
+        public static MethodInfo GetMethodRecursive(this Type type, string name, BindingFlags flags, Type[] parameters = null) {
+            if(parameters != null) {
+                if(type.GetMethod(name, flags, null, parameters, null) is MethodInfo info) return info;
+            } else {
+                if(type.GetMethod(name, flags) is MethodInfo info) return info;
+            }
+            return type.BaseType?.GetMethodRecursive(name, flags, parameters);
+        }
 
         /// <summary>
         /// Virtualizes the given method.
         /// The method must be hiding a non-virtual method in the base class and have an empty/NOP body.
         /// After being patched, child classes overriding the class can call the original method by calling the base method, and their virtual method is called instead of the hidden method.
         /// </summary>
-        public static void Virtualize(MethodInfo method, IList<IDetour> hooks) {
-            //Get the hidden base method
-            MethodInfo hiddenMethod = method.DeclaringType.BaseType.GetMethod(method.Name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
+        public static void Virtualize(this MethodInfo method, IList<IDetour> hooks) {
+            if(method.IsStatic) throw new ArgumentException("Can't virtualize a static method!");
 
-            //Check parameters
-            Type[] parameters = hiddenMethod.GetParameters().Select(p => p.ParameterType).ToArray();
-            if(!parameters.SequenceEqual(method.GetParameters().Select(p => p.ParameterType)) || method.ReturnParameter.ParameterType != hiddenMethod.ReturnParameter.ParameterType) throw new InvalidOperationException($"Virtual method '{method.Name}' has different parameters than the base method!");
+            //Get the hidden base method
+            Type[] parameters = method.GetParameters().Select(p => p.ParameterType).ToArray();
+            MethodInfo hiddenMethod = method.DeclaringType.BaseType.GetMethodRecursive(method.Name, BindAllInstance, parameters);
 
             //Install base method hook
             hooks.Add(new ILHook(hiddenMethod, ctx => {
@@ -38,7 +53,8 @@ namespace Celeste.Mod.Procedurline {
                 cursor.Emit(OpCodes.Cgt_Un);
                 cursor.Emit(OpCodes.Neg);
                 cursor.Emit(OpCodes.Ldsfld, fromVirtualizedField);
-                cursor.Emit(OpCodes.Or);
+                cursor.Emit(OpCodes.Neg);
+                cursor.Emit(OpCodes.And);
                 cursor.Emit(OpCodes.Brfalse, notDeclareType);
 
                 //Call the virtual method
