@@ -23,9 +23,9 @@ namespace Celeste.Mod.Procedurline {
         /// <summary>
         /// External sources invoking this processor <b>MUST</b> register the $GLOBAL and $STATIC scopes themselves.
         /// </summary> 
-        public readonly IDataProcessor<Sprite, string, SpriteAnimationData> Processor;
+        public readonly IAsyncDataProcessor<Sprite, string, SpriteAnimationData> Processor;
 
-        public StaticSprite(string spriteId, Sprite origSprite, IDataProcessor<Sprite, string, SpriteAnimationData> processor, TextureScope texScope = null) : base(null, string.Empty) {
+        public StaticSprite(string spriteId, Sprite origSprite, IAsyncDataProcessor<Sprite, string, SpriteAnimationData> processor, TextureScope texScope = null) : base(null, string.Empty) {
             if(origSprite.GetType() != typeof(Sprite)) throw new ArgumentException($"Given sprite isn't a vanilla Monocle sprite! [type {origSprite.GetType()}]");
 
             SpriteID = spriteId;
@@ -217,9 +217,9 @@ namespace Celeste.Mod.Procedurline {
                 //Get original animation's data
                 using(SpriteAnimationData animData = await ProcedurlineModule.SpriteManager.GetAnimationData(OriginalAnimation)) {
                     //Run processor
-                    SpriteAnimationData procAnimData = animData;
+                    AsyncRef<SpriteAnimationData> procAnimData = new AsyncRef<SpriteAnimationData>(animData);
                     Sprite.Animation procAnim = OriginalAnimation;
-                    if(Sprite.Processor.ProcessData(Sprite, scopeKey, AnimationID, ref procAnimData)) {
+                    if(await Sprite.Processor.ProcessDataAsync(Sprite, scopeKey, AnimationID, procAnimData)) {
                         //Create new animation
                         procAnim = await ProcedurlineModule.SpriteManager.CreateAnimation(AnimationID, Sprite.TextureScope, procAnimData, token, texHandleRef);
                     }
