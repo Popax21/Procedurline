@@ -2,6 +2,18 @@ using System;
 
 namespace Celeste.Mod.Procedurline {
     /// <summary>
+    /// Marks this method as a content initializer to call when loading the mod.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Method)]
+    internal sealed class ContentInitAttribute : Attribute {}
+
+    /// <summary>
+    /// Marks this method as a content uninitializer to call when unloading the mod.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Method)]
+    internal sealed class ContentUninitAttribute : Attribute {}
+
+    /// <summary>
     /// Marks this method as a hook to apply to a content method.
     /// </summary>
     [AttributeUsage(AttributeTargets.Method)]
@@ -21,11 +33,13 @@ namespace Celeste.Mod.Procedurline {
     [AttributeUsage(AttributeTargets.Method)]
     internal sealed class ContentILHookAttribute : Attribute {
         public readonly string TargetTypeName, TargetMethodName;
+        public readonly bool HookStateMachine;
 
-        public ContentILHookAttribute(string methodName) : this(null, methodName) {}
-        public ContentILHookAttribute(string typeName, string methodName) {
+        public ContentILHookAttribute(string methodName, bool hookStateMachine = false) : this(null, methodName, hookStateMachine) {}
+        public ContentILHookAttribute(string typeName, string methodName, bool hookStateMachine = false) {
             TargetTypeName = typeName;
             TargetMethodName = methodName;
+            HookStateMachine = hookStateMachine;
         }
     }
 

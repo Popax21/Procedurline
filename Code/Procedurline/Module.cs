@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 
 using MonoMod.Cil;
+using MonoMod.Utils;
 using MonoMod.RuntimeDetour;
 using Monocle;
 
@@ -45,6 +46,8 @@ namespace Celeste.Mod.Procedurline {
             //Apply content hooks and patches
             foreach(Type type in typeof(ProcedurlineModule).Assembly.GetTypes()) {
                 foreach(MethodInfo method in type.GetMethods(PatchUtils.BindAllStatic)) {
+                    if(method.GetCustomAttribute(typeof(ContentInitAttribute)) is ContentInitAttribute) method.Invoke(null, Array.Empty<object>());
+
                     if(method.GetCustomAttribute(typeof(ContentHookAttribute)) is ContentHookAttribute hookAttr) {
                         Type targetType = (hookAttr.TargetTypeName != null) ? Assembly.GetEntryAssembly().GetType(hookAttr.TargetTypeName, true, true) : type.BaseType;
                         contentHooks.Add(new Hook(targetType.GetMethodRecursive(hookAttr.TargetMethodName, PatchUtils.BindAll), method));
@@ -52,7 +55,9 @@ namespace Celeste.Mod.Procedurline {
 
                     if(method.GetCustomAttribute(typeof(ContentILHookAttribute)) is ContentILHookAttribute ilHookAttr) {
                         Type targetType = (ilHookAttr.TargetTypeName != null) ? Assembly.GetEntryAssembly().GetType(ilHookAttr.TargetTypeName, true, true) : type.BaseType;
-                        contentHooks.Add(new ILHook(targetType.GetMethodRecursive(ilHookAttr.TargetMethodName, PatchUtils.BindAll), (ILContext.Manipulator) method.CreateDelegate(typeof(ILContext.Manipulator))));
+                        MethodInfo targetMethod = targetType.GetMethodRecursive(ilHookAttr.TargetMethodName, PatchUtils.BindAll);
+                        if(ilHookAttr.HookStateMachine) targetMethod = targetMethod.GetStateMachineTarget();
+                        contentHooks.Add(new ILHook(targetMethod, (ILContext.Manipulator) method.CreateDelegate(typeof(ILContext.Manipulator))));
                     }
                 }
 
@@ -81,6 +86,13 @@ namespace Celeste.Mod.Procedurline {
             //Dispose content hooks
             foreach(IDetour hook in contentHooks) hook.Dispose();
             contentHooks.Clear();
+
+            //Call content uninitializers
+            foreach(Type type in typeof(ProcedurlineModule).Assembly.GetTypes()) {
+                foreach(MethodInfo method in type.GetMethods(PatchUtils.BindAllStatic)) {
+                    if(method.GetCustomAttribute(typeof(ContentInitAttribute)) is ContentUninitAttribute) method.Invoke(null, Array.Empty<object>());
+                }
+            }
 
             //Dispose default scopes
             globalScope?.Dispose();
