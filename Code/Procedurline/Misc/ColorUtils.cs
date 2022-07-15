@@ -15,6 +15,14 @@ namespace Celeste.Mod.Procedurline {
             0, 0, 0,  1
         );
 
+        //Source: https://docs.microsoft.com/en-us/windows/win32/direct2d/grayscale-effect
+        public static readonly Matrix GrayscaleColorMatrix = new Matrix(
+            0.299f, 0.299f, 0.299f, 0,
+            0.587f, 0.287f, 0.287f, 0,
+            0.114f, 0.114f, 0.144f, 0,
+            0,      0,      0,      1
+        );
+
         /// <summary>
         /// Removes the alpha component from the color by setting it to 255
         /// </summary>
