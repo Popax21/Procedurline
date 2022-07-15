@@ -217,7 +217,14 @@ namespace Celeste.Mod.Procedurline {
                 bool didPatchDreamBlockChange = false;
                 cursor.Index = 0;
                 while(cursor.TryGotoNext(MoveType.After, i => i.MatchStfld(Player_dreamBlock))) {
-                    ILLabel prevNotCustom = cursor.DefineLabel(), newNotCustom = cursor.DefineLabel();
+                    ILLabel prevNotCustom = cursor.DefineLabel(), newNotCustom = cursor.DefineLabel(), noChange = cursor.DefineLabel();
+
+                    //Check if the dream block has changed
+                    cursor.Emit(OpCodes.Ldarg_0);
+                    cursor.Emit(OpCodes.Ldfld, Player_dreamBlock);
+                    cursor.Emit(OpCodes.Ldloc, prevBlockVar);
+                    cursor.Emit(OpCodes.Ceq);
+                    cursor.Emit(OpCodes.Brtrue, noChange);
 
                     //Check if we previously were in a custom dream block
                     cursor.Emit(OpCodes.Ldloc, prevBlockVar);
@@ -266,6 +273,7 @@ namespace Celeste.Mod.Procedurline {
                     cursor.Emit(OpCodes.Ldfld, Player_dreamBlock);
                     cursor.Emit(OpCodes.Stloc, prevBlockVar);
 
+                    cursor.MarkLabel(noChange);
                     didPatchDreamBlockChange = true;
                 }
                 if(!didPatchDreamBlockChange) Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Couldn't patch DreamBlock switchover!");
