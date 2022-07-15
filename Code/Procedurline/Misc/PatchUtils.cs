@@ -66,8 +66,6 @@ namespace Celeste.Mod.Procedurline {
                 //Check if the object is the declaring type
                 cursor.Emit(OpCodes.Ldarg_0);
                 cursor.Emit(OpCodes.Isinst, method.DeclaringType);
-                cursor.Emit(OpCodes.Ldnull);
-                cursor.Emit(OpCodes.Cgt_Un);
                 cursor.Emit(OpCodes.Brfalse, callOrig);
 
                 //Check if we're coming from the virtual method, and reset the field afterwards
@@ -195,15 +193,13 @@ namespace Celeste.Mod.Procedurline {
 
                 ILCursor cursor = new ILCursor(ctx);
                 bool didPatch = false;
-                while(cursor.TryGotoNext(i => i.MatchCall(out MethodReference m) && m.DeclaringType.FullName == "Celeste.Audio" && (m.Name == "Play" || m.Name == "Loop"))) {
+                while(cursor.TryGotoNext(MoveType.Before, i => i.MatchCall(out MethodReference m) && m.DeclaringType.FullName == "Celeste.Audio" && (m.Name == "Play" || m.Name == "Loop"))) {
                     ILLabel restoreArgs = cursor.DefineLabel(), playSfx = cursor.DefineLabel();
                     MethodReference playMethod = (MethodReference) cursor.Instrs[cursor.Index].Operand;
 
                     //Check if this is a custom type
                     cursor.Emit(OpCodes.Ldarg_0);
                     cursor.Emit(OpCodes.Isinst, sfxProp.DeclaringType);
-                    cursor.Emit(OpCodes.Ldnull);
-                    cursor.Emit(OpCodes.Cgt_Un);
                     cursor.Emit(OpCodes.Brfalse, playSfx);
 
                     //Save extra arguments
@@ -240,6 +236,7 @@ namespace Celeste.Mod.Procedurline {
                     }
 
                     cursor.MarkLabel(playSfx);
+                    cursor.Index++;
 
                     didPatch = true;
                 }
