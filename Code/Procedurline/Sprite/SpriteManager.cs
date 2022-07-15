@@ -119,7 +119,7 @@ namespace Celeste.Mod.Procedurline {
                     ILHook hook = new ILHook(m, ctx => {
                         //Replace all animation dict get accesses
                         ILCursor cursor = new ILCursor(ctx);
-                        while(cursor.TryGotoNext(MoveType.Before, instr => instr.MatchCallvirt(typeof(Dictionary<string, Sprite.Animation>).GetMethod("get_Item")))) {
+                        while(cursor.TryGotoNext(MoveType.Before, instr => instr.MatchCallOrCallvirt(typeof(Dictionary<string, Sprite.Animation>).GetMethod("get_Item")))) {
                             //Replace with hook
                             cursor.Remove();
                             cursor.Emit(OpCodes.Ldarg_0);

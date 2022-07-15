@@ -241,7 +241,7 @@ namespace Celeste.Mod.Procedurline {
                     didPatch = true;
                 }
 
-                if(!didPatch) Logger.Log(ProcedurlineModule.Name, $"PatchSFX: Found no Audio.Play calls to patch!");
+                if(!didPatch) Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"PatchSFX: Found no Audio.Play calls to patch!");
             }));
         }
     }
