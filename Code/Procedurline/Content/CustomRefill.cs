@@ -70,8 +70,11 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
-        /// Called when the player touches your refill. Return <c>true</c> if the default break behaviour should occur, or <c>false</c> otherwise.
+        /// Called when the player touches your refill.
         /// </summary>
+        /// <returns>
+        /// <c>true</c> if the default break behaviour should occur, or <c>false</c> otherwise.
+        /// </returns>
         protected abstract bool OnTouch(Player player);
 
         public bool Broken => !Collidable;

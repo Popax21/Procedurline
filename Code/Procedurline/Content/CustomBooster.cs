@@ -81,8 +81,11 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
-        /// Called when the player enters your booster. Return the type of boost it should give them, or <c>null</c> if no default behaviour should take place.
+        /// Called when the player enters your booster.
         /// </summary>
+        /// <returns>
+        /// The type of boost it should give them, or <c>null</c> if no default behaviour should take place.
+        /// </returns>
         protected abstract BoostType? OnPlayerEnter(Player player);
         [ContentVirtualize] protected virtual new void Appear() {}
         [ContentVirtualize(false)] protected virtual void AppearParticles() {
