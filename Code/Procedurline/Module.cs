@@ -46,12 +46,12 @@ namespace Celeste.Mod.Procedurline {
             foreach(Type type in typeof(ProcedurlineModule).Assembly.GetTypes()) {
                 foreach(MethodInfo method in type.GetMethods(PatchUtils.BindAllStatic)) {
                     if(method.GetCustomAttribute(typeof(ContentHookAttribute)) is ContentHookAttribute hookAttr) {
-                        Type targetType = (hookAttr.TargetTypeName != null) ? Assembly.GetEntryAssembly().GetType(hookAttr.TargetTypeName, true, true) : type;
+                        Type targetType = (hookAttr.TargetTypeName != null) ? Assembly.GetEntryAssembly().GetType(hookAttr.TargetTypeName, true, true) : type.BaseType;
                         contentHooks.Add(new Hook(targetType.GetMethodRecursive(hookAttr.TargetMethodName, PatchUtils.BindAll), method));
                     }
 
                     if(method.GetCustomAttribute(typeof(ContentILHookAttribute)) is ContentILHookAttribute ilHookAttr) {
-                        Type targetType = (ilHookAttr.TargetTypeName != null) ? Assembly.GetEntryAssembly().GetType(ilHookAttr.TargetTypeName, true, true) : type;
+                        Type targetType = (ilHookAttr.TargetTypeName != null) ? Assembly.GetEntryAssembly().GetType(ilHookAttr.TargetTypeName, true, true) : type.BaseType;
                         contentHooks.Add(new ILHook(targetType.GetMethodRecursive(ilHookAttr.TargetMethodName, PatchUtils.BindAll), (ILContext.Manipulator) method.CreateDelegate(typeof(ILContext.Manipulator))));
                     }
                 }
