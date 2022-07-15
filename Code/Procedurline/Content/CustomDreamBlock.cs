@@ -212,6 +212,53 @@ namespace Celeste.Mod.Procedurline {
             cursor.Emit(OpCodes.Ldfld, Player_dreamBlock);
             cursor.Emit(OpCodes.Stloc, prevBlockVar);
 
+            //Add call to UpdatePlayer
+            {
+                ILLabel notCustom = cursor.DefineLabel();
+
+                //Check if we are in a custom dream block
+                cursor.Emit(OpCodes.Ldloc, prevBlockVar);
+                cursor.Emit(OpCodes.Isinst, typeof(CustomDreamBlock));
+                cursor.Emit(OpCodes.Brfalse, notCustom);
+
+                //Call UpdatePlayer
+                cursor.Emit(OpCodes.Ldloc, prevBlockVar);
+                cursor.Emit(OpCodes.Castclass, typeof(CustomDreamBlock));
+                cursor.Emit(OpCodes.Ldarg_0);
+                cursor.Emit(OpCodes.Callvirt, typeof(CustomDreamBlock).GetMethod(nameof(UpdatePlayer), PatchUtils.BindAllInstance));
+
+                cursor.MarkLabel(notCustom);
+            }
+
+            //NOP out regular update logic for custom dream blocks
+            void NOPCall(MethodInfo method) {
+                bool didPatch = false;
+                cursor.Index = 0;
+                while(cursor.TryGotoNext(MoveType.Before, i => i.MatchCallOrCallvirt(method))) {
+                    ILLabel notCustom = cursor.DefineLabel(), end = cursor.DefineLabel();
+
+                    //Check if we are in a custom dream block
+                    cursor.Emit(OpCodes.Ldloc, prevBlockVar);
+                    cursor.Emit(OpCodes.Isinst, typeof(CustomDreamBlock));
+                    cursor.Emit(OpCodes.Brfalse, notCustom);
+
+                    //Pop arguments
+                    int numParams = method.GetParameters().Length;
+                    if(!method.IsStatic) numParams++;
+                    for(int i = 0; i < numParams; i++) cursor.Emit(OpCodes.Pop);
+
+                    cursor.Emit(OpCodes.Br, end); 
+
+                    cursor.MarkLabel(notCustom);
+                    cursor.Index++;
+                    cursor.MarkLabel(end);
+                    didPatch = true;
+                }
+                if(!didPatch) Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Couldn't patch DreamBlock call of '{method}'!");
+            }
+            NOPCall(typeof(Player).GetMethod(nameof(Player.NaiveMove)));
+            NOPCall(typeof(Input).GetMethod(nameof(Input.Rumble)));
+
             //Patch the dreamBlock field assignment
             {
                 bool didPatchDreamBlockChange = false;
@@ -377,6 +424,14 @@ namespace Celeste.Mod.Procedurline {
         /// <c>true</c> if the player should bounce of the solid, <c>false</c> if they should die (even if they're invincible)
         /// </returns>
         protected virtual bool OnCollideSolid(Player player) => SaveData.Instance.Assists.Invincible;
+
+        /// <summary>
+        /// Called to run the player's update logic while in the dream block. By default, this executes vanilla movement code.
+        /// </summary>
+        protected virtual void UpdatePlayer(Player player) {
+            Input.Rumble(RumbleStrength.Light, RumbleLength.Medium);
+            player.NaiveMove(player.Speed * Engine.DeltaTime);
+        }
 
         [ContentVirtualize] protected virtual new IEnumerator Activate() => default;
         [ContentVirtualize] protected virtual new IEnumerator FastActivate() => default;
