@@ -14,8 +14,6 @@ namespace Celeste.Mod.Procedurline {
         public const BindingFlags BindAllInstance = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
         public const BindingFlags BindAll = BindAllStatic | BindAllInstance;
 
-        [ThreadStatic] private static bool fromVirtualized = false;
-
         /// <summary>
         /// Finds a field in this type or any base types recursively.
         /// </summary>
@@ -51,77 +49,9 @@ namespace Celeste.Mod.Procedurline {
         /// </summary>
         public static void Virtualize(this MethodInfo method, bool callBase, IList<IDetour> hooks) {
             if(method.IsStatic) throw new ArgumentException($"Can't virtualize static method {method}!");
-
-            //Get the hidden base method
             Type[] parameters = method.GetParameters().Select(p => p.ParameterType).ToArray();
-            MethodInfo hiddenMethod = method.DeclaringType.BaseType.GetMethodRecursive(method.Name, BindAllInstance, parameters);
-            if(!hiddenMethod.GetParameters().Select(p => p.ParameterType).SequenceEqual(parameters) || hiddenMethod.ReturnParameter.ParameterType != method.ReturnParameter.ParameterType) throw new ArgumentException($"Method {method} has different parameters than base method {hiddenMethod}");
-
-            //Install base method hook
-            hooks.Add(new ILHook(hiddenMethod, ctx => {
-                ILCursor cursor = new ILCursor(ctx);
-                ILLabel callOrig = cursor.DefineLabel();
-                FieldInfo fromVirtualizedField = typeof(PatchUtils).GetField(nameof(fromVirtualized), BindingFlags.NonPublic | BindingFlags.Static);
-
-                //Check if the object is the declaring type
-                cursor.Emit(OpCodes.Ldarg_0);
-                cursor.Emit(OpCodes.Isinst, method.DeclaringType);
-                cursor.Emit(OpCodes.Brfalse, callOrig);
-
-                //Check if we're coming from the virtual method, and reset the field afterwards
-                cursor.Emit(OpCodes.Ldsfld, fromVirtualizedField);
-                cursor.Emit(OpCodes.Ldc_I4_0);
-                cursor.Emit(OpCodes.Stsfld, fromVirtualizedField);
-                cursor.Emit(OpCodes.Brtrue, callOrig);
-
-                //Call the virtual method
-                cursor.Emit(OpCodes.Ldarg_0);
-                cursor.Emit(OpCodes.Castclass, method.DeclaringType);
-                for(int i = 0; i < parameters.Length; i++) cursor.Emit(OpCodes.Ldarg, 1+i);
-                cursor.Emit(OpCodes.Callvirt, method);
-                cursor.Emit(OpCodes.Ret);
-
-                cursor.MarkLabel(callOrig);
-            }));
-
-            if(callBase) {
-                //Install virtual method hook
-                hooks.Add(new ILHook(method, ctx => {
-                    ILCursor cursor = new ILCursor(ctx);
-                    FieldInfo fromVirtualizedField = typeof(PatchUtils).GetField(nameof(fromVirtualized), BindingFlags.NonPublic | BindingFlags.Static);
-                    ILLabel tryStart = cursor.DefineLabel(), tryEnd = cursor.DefineLabel(), finallyEnd = cursor.DefineLabel();
-
-                    cursor.MarkLabel(tryStart);
-
-                    //Set "from virtual method" flag
-                    cursor.Emit(OpCodes.Ldc_I4_1);
-                    cursor.Emit(OpCodes.Stsfld, fromVirtualizedField);
-
-                    //Call the base method
-                    cursor.Emit(OpCodes.Ldarg_0);
-                    cursor.Emit(OpCodes.Castclass, hiddenMethod.DeclaringType);
-                    for(int i = 0; i < parameters.Length; i++) cursor.Emit(OpCodes.Ldarg, 1+i);
-                    cursor.Emit(OpCodes.Callvirt, hiddenMethod);
-                    cursor.Emit(OpCodes.Ret);
-
-                    cursor.MarkLabel(tryEnd);
-
-                    //Finally block
-                    cursor.Emit(OpCodes.Ldc_I4_0);
-                    cursor.Emit(OpCodes.Stsfld, fromVirtualizedField);
-                    cursor.Emit(OpCodes.Endfinally);
-
-                    cursor.MarkLabel(finallyEnd);
-
-                    //Register finally block
-                    ctx.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Finally) {
-                        TryStart = tryStart.Target,
-                        TryEnd = tryEnd.Target,
-                        HandlerStart = tryEnd.Target,
-                        HandlerEnd = finallyEnd.Target
-                    });
-                }));
-            }
+            MethodInfo baseMethod = method.DeclaringType.BaseType.GetMethodRecursive(method.Name, BindAllInstance, parameters);
+            hooks.Add(new MethodVirtualizerDetour(baseMethod, method, callBase));
         }
 
         /// <summary>
