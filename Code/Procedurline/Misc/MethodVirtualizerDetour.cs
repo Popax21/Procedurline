@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 using Mono.Cecil.Cil;
 using MonoMod.Utils;
@@ -13,10 +15,9 @@ namespace Celeste.Mod.Procedurline {
         public readonly MethodInfo VirtualMethod;
         public readonly bool CallBase;
 
-        private Detour baseDetour;
         private MethodBase detourTrampoline, redirTrampoline, baseTrampoline;
-        private IntPtr detourTrampolinePtr;
-        private NativeDetour baseTrampolineDetour, virtualDetour;
+        private Detour baseDetour;
+        private NativeDetour baseTrampolineDetour, virtualMethDetour;
 
         public MethodVirtualizerDetour(MethodInfo baseMeth, MethodInfo virtualMeth, bool callBase) {
             BaseMethod = baseMeth;
@@ -34,7 +35,6 @@ namespace Celeste.Mod.Procedurline {
             //Create redirection trampoline
             using(DynamicMethodDefinition methDef = new DynamicMethodDefinition($"PL_VirtualRedir<{baseMeth.GetID(simple: true)}>?{GetHashCode()}", baseMeth.ReturnType, methThisParams)) {
                 ILProcessor il = methDef.GetILProcessor();
-                Instruction callVirtualTarget = Instruction.Create(OpCodes.Nop);
 
                 //No inlining
                 for(int i = 0; i < 32; i++) il.Emit(OpCodes.Nop);
@@ -42,16 +42,18 @@ namespace Celeste.Mod.Procedurline {
                 //Check if the object is the declaring type
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Isinst, virtualMeth.DeclaringType);
-                il.Emit(OpCodes.Brtrue, callVirtualTarget);
-                il.Emit(OpCodes.Jmp, baseTrampoline);
+                int brIdx = il.Body.Instructions.Count;
+                il.Emit(OpCodes.Brfalse, il.Body.Instructions[0]);
 
                 //Call the virtual method
-                il.Append(callVirtualTarget);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Castclass, virtualMeth.DeclaringType);
                 for(int i = 0; i < methParams.Length; i++) il.Emit(OpCodes.Ldarg, 1+i);
                 il.Emit(OpCodes.Callvirt, virtualMeth);
                 il.Emit(OpCodes.Ret);
+
+                il.Emit(OpCodes.Jmp, baseTrampoline);
+                il.Body.Instructions[brIdx].Operand = il.Body.Instructions[il.Body.Instructions.Count-1];
 
                 redirTrampoline = methDef.Generate();
             }
@@ -60,52 +62,47 @@ namespace Celeste.Mod.Procedurline {
             baseDetour = new Detour(baseMeth, redirTrampoline);
 
             //Fix base trampoline
-            //*this* should have been the point where I should have stopped this madness ._.
             detourTrampoline = (MethodBase) typeof(Detour).GetField("_ChainedTrampoline", PatchUtils.BindAllInstance).GetValue(baseDetour);
-            detourTrampolinePtr = detourTrampoline.Pin().GetNativeStart();
-            baseTrampolineDetour = new NativeDetour(baseTrampoline, detourTrampolinePtr);
+            baseTrampolineDetour = new NativeDetour(baseTrampoline, detourTrampoline);
 
             if(callBase) {
-                //Replace the virtual method with the base detour trampoline to re-enter the detour chain
-                virtualDetour = new NativeDetour(virtualMeth, detourTrampolinePtr);
+                //Detour the virtual method to the base trampoline
+                virtualMethDetour = new NativeDetour(virtualMeth, detourTrampoline);
             }
         }
 
         public void Dispose() {
             baseDetour?.Dispose();
             baseTrampolineDetour?.Dispose();
-            virtualDetour?.Dispose();
-
-            detourTrampoline?.Unpin();
 
             baseDetour = null;
             detourTrampoline = null;
-            detourTrampolinePtr = IntPtr.Zero;
 
             redirTrampoline = null;
             baseTrampoline = null;
             baseTrampolineDetour = null;
 
-            virtualDetour = null;
+            virtualMethDetour?.Dispose();
+            virtualMethDetour = null;
         }
 
         public void Apply() {
             baseDetour?.Apply();
-            virtualDetour?.Apply();
+            virtualMethDetour?.Apply();
         }
 
         public void Undo() {
             baseDetour?.Undo();
-            virtualDetour?.Undo();
+            virtualMethDetour?.Undo();
         }
 
         public void Free() {
             baseDetour?.Free();
-            virtualDetour?.Free();
+            virtualMethDetour?.Free();
         }
 
         public MethodBase GenerateTrampoline(MethodBase signature = null) => baseDetour?.GenerateTrampoline(signature);
-        T IDetour.GenerateTrampoline<T>() => baseDetour.GenerateTrampoline<T>();
+        T IDetour.GenerateTrampoline<T>() => baseDetour?.GenerateTrampoline<T>();
 
         public bool IsValid => baseDetour?.IsValid ?? false;
         public bool IsApplied => baseDetour?.IsApplied ?? false;

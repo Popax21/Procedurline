@@ -14,6 +14,10 @@ namespace Celeste.Mod.Procedurline {
         public const BindingFlags BindAllInstance = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
         public const BindingFlags BindAll = BindAllStatic | BindAllInstance;
 
+        public static string GetFullName(this FieldInfo field) => $"{field.DeclaringType}.{field.Name}";
+        public static string GetFullName(this MethodInfo method) => $"{method.DeclaringType}.{method.Name}";
+        public static string GetFullName(this PropertyInfo property) => $"{property.DeclaringType}.{property.Name}";
+
         /// <summary>
         /// Finds a field in this type or any base types recursively.
         /// </summary>
@@ -48,7 +52,7 @@ namespace Celeste.Mod.Procedurline {
         /// After being patched, child classes overriding the class can call the original method by calling the base method, and their virtual method is called instead of the hidden method.
         /// </summary>
         public static void Virtualize(this MethodInfo method, bool callBase, IList<IDetour> hooks) {
-            if(method.IsStatic) throw new ArgumentException($"Can't virtualize static method {method}!");
+            if(method.IsStatic) throw new ArgumentException($"Can't virtualize static method {method.GetFullName()}!");
             Type[] parameters = method.GetParameters().Select(p => p.ParameterType).ToArray();
             MethodInfo baseMethod = method.DeclaringType.BaseType.GetMethodRecursive(method.Name, BindAllInstance, parameters);
             hooks.Add(new MethodVirtualizerDetour(baseMethod, method, callBase));
@@ -59,8 +63,8 @@ namespace Celeste.Mod.Procedurline {
         /// </summary>
         public static void PatchFieldProxy(this PropertyInfo prop, FieldInfo field, IList<IDetour> hooks) {
             //Check field for compatibility
-            if(prop.GetAccessors(true).Any(a => a.IsStatic != field.IsStatic) || prop.PropertyType.IsAssignableFrom(field.FieldType)) new ArgumentException($"Mismatching field {field} and property {prop} types!");
-            if(!field.DeclaringType.IsAssignableFrom(prop.DeclaringType)) throw new ArgumentException($"Property {prop} in different type than field!");
+            if(prop.GetAccessors(true).Any(a => a.IsStatic != field.IsStatic) || prop.PropertyType.IsAssignableFrom(field.FieldType)) new ArgumentException($"Mismatching field {field.GetFullName()} and property {prop.GetFullName()} types!");
+            if(!field.DeclaringType.IsAssignableFrom(prop.DeclaringType)) throw new ArgumentException($"Property {prop.GetFullName()} in different type than field!");
 
             //Hook getter
             if(prop.GetGetMethod(true) is MethodInfo getter) {
@@ -112,8 +116,8 @@ namespace Celeste.Mod.Procedurline {
         public static void PatchSFX(this MethodInfo method, PropertyInfo sfxProp, IList<IDetour> hooks) {
             //Check property for compatibility
             MethodInfo sfxPropGetter = sfxProp.GetGetMethod(true);
-            if(sfxPropGetter == null || sfxPropGetter.IsStatic || sfxProp.PropertyType != typeof(string)) throw new ArgumentException($"Incompatible SFX property {sfxProp}!");
-            if(!method.DeclaringType.IsAssignableFrom(sfxProp.DeclaringType)) throw new ArgumentException($"SFX property {sfxProp} in different type than method!");
+            if(sfxPropGetter == null || sfxPropGetter.IsStatic || sfxProp.PropertyType != typeof(string)) throw new ArgumentException($"Incompatible SFX property {sfxProp.GetFullName()}!");
+            if(!method.DeclaringType.IsAssignableFrom(sfxProp.DeclaringType)) throw new ArgumentException($"SFX property {sfxProp.GetFullName()} in different type than method!");
 
             //Hook calls to Audio.Play/Loop
             hooks.Add(new ILHook(method, ctx => {
@@ -171,7 +175,7 @@ namespace Celeste.Mod.Procedurline {
                     didPatch = true;
                 }
 
-                if(!didPatch) Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"PatchSFX: Found no Audio.Play calls to patch!");
+                if(!didPatch) Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"PatchSFX: Found no Audio.Play calls to patch in method {method.GetFullName()}!");
             }));
         }
     }

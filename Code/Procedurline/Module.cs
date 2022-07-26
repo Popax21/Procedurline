@@ -45,7 +45,7 @@ namespace Celeste.Mod.Procedurline {
 
             //Apply content hooks and patches
             foreach(Type type in typeof(ProcedurlineModule).Assembly.GetTypes()) {
-                foreach(MethodInfo method in type.GetMethods(PatchUtils.BindAllStatic)) {
+                foreach(MethodInfo method in type.GetMethods(PatchUtils.BindAllStatic | BindingFlags.DeclaredOnly)) {
                     if(method.GetCustomAttribute(typeof(ContentInitAttribute)) is ContentInitAttribute) method.Invoke(null, Array.Empty<object>());
 
                     if(method.GetCustomAttribute(typeof(ContentHookAttribute)) is ContentHookAttribute hookAttr) {
@@ -61,22 +61,21 @@ namespace Celeste.Mod.Procedurline {
                     }
                 }
 
-                foreach(MethodInfo method in type.GetMethods(PatchUtils.BindAllInstance)) {
+                foreach(MethodInfo method in type.GetMethods(PatchUtils.BindAllInstance | BindingFlags.DeclaredOnly)) {
                     if(method.GetCustomAttribute(typeof(ContentVirtualizeAttribute)) is ContentVirtualizeAttribute virtAttr) {
                         method.Virtualize(virtAttr.CallBase, contentHooks);
                     }
                 }
 
-                foreach(PropertyInfo prop in type.GetProperties(PatchUtils.BindAll)) {
+                foreach(PropertyInfo prop in type.GetProperties(PatchUtils.BindAll | BindingFlags.DeclaredOnly)) {
                     if(prop.GetCustomAttribute(typeof(ContentFieldProxyAttribute)) is ContentFieldProxyAttribute proxyAttr) {
                         prop.PatchFieldProxy(type.GetFieldRecursive(proxyAttr.TargetFieldName, PatchUtils.BindAll), contentHooks);
                     }
                 }
 
-                foreach(PropertyInfo prop in type.GetProperties(PatchUtils.BindAllInstance)) {
+                foreach(PropertyInfo prop in type.GetProperties(PatchUtils.BindAllInstance | BindingFlags.DeclaredOnly)) {
                     foreach(ContentPatchSFXAttribute sfxAttr in prop.GetCustomAttributes(typeof(ContentPatchSFXAttribute)).Cast<ContentPatchSFXAttribute>()) {
-                        Type targetType = (sfxAttr.TargetTypeName != null) ? Assembly.GetEntryAssembly().GetType(sfxAttr.TargetTypeName, true, true) : type.BaseType;
-                        targetType.GetMethodRecursive(sfxAttr.TargetMethodName, PatchUtils.BindAll).PatchSFX(prop, contentHooks);
+                        type.BaseType.GetMethodRecursive(sfxAttr.TargetMethodName, PatchUtils.BindAllInstance).PatchSFX(prop, contentHooks);
                     }
                 }
             }

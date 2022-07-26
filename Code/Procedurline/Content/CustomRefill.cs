@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using System.Collections;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 using Microsoft.Xna.Framework;
 using Monocle;
@@ -82,8 +83,8 @@ namespace Celeste.Mod.Procedurline {
         [ContentVirtualize(false)] protected virtual void OnPlayer(Player player) {
             if(!Broken && OnTouch(player)) Break(player);
         }
-        [ContentVirtualize] protected virtual void Respawn() {}
-        [ContentVirtualize] protected virtual IEnumerator RefillRoutine(Player player) => default;
+        [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual void Respawn() {}
+        [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual IEnumerator RefillRoutine(Player player) => default;
 
         protected virtual string CollectSFX => DoubleRefill ? "event:/new_content/game/10_farewell/pinkdiamond_touch" : "event:/game/general/diamond_touch";
         [ContentPatchSFX("Respawn")] protected virtual string RespawnSFX => DoubleRefill ? "event:/new_content/game/10_farewell/pinkdiamond_return" : "event:/game/general/diamond_return";

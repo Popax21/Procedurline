@@ -1,6 +1,7 @@
 using System;
 using System.Reflection;
 using System.Collections;
+using System.Runtime.CompilerServices;
 using Microsoft.Xna.Framework;
 
 using Mono.Cecil.Cil;
@@ -433,12 +434,12 @@ namespace Celeste.Mod.Procedurline {
             player.NaiveMove(player.Speed * Engine.DeltaTime);
         }
 
-        [ContentVirtualize] protected virtual new IEnumerator Activate() => default;
-        [ContentVirtualize] protected virtual new IEnumerator FastActivate() => default;
-        [ContentVirtualize] protected virtual new void ActivateNoRoutine() {}
-        [ContentVirtualize] protected virtual new IEnumerator Deactivate() => default;
-        [ContentVirtualize] protected virtual new IEnumerator FastDeactivate() => default;
-        [ContentVirtualize] protected virtual new void DeactivateNoRoutine() {}
+        [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual new IEnumerator Activate() => default;
+        [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual new IEnumerator FastActivate() => default;
+        [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual new void ActivateNoRoutine() {}
+        [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual new IEnumerator Deactivate() => default;
+        [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual new IEnumerator FastDeactivate() => default;
+        [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual new void DeactivateNoRoutine() {}
 
         [ContentVirtualize(false)] protected virtual new void Setup() {
             ParticleData[] pdata = CreateParticles();
@@ -446,14 +447,14 @@ namespace Celeste.Mod.Procedurline {
             Particles = Array.CreateInstance(DreamParticleType, pdata.Length);
             for(int i = 0; i < pdata.Length; i++) Particles.SetValue(FromParticleData(pdata[i]), i);
         }
-        [ContentVirtualize] protected virtual new void OnPlayerExit(Player player) {}
-        [ContentVirtualize] protected virtual void OneUseDestroy() {}
+        [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual new void OnPlayerExit(Player player) {}
+        [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual void OneUseDestroy() {}
 
-        [ContentVirtualize] protected virtual float LineAmplitude(float seed, float index) => default;
-        [ContentVirtualize] protected virtual void WobbleLine(Vector2 from, Vector2 to, float offset) {}
+        [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual float LineAmplitude(float seed, float index) => default;
+        [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual void WobbleLine(Vector2 from, Vector2 to, float offset) {}
 
-        [ContentVirtualize] protected virtual new bool BlockedCheck() => default;
-        [ContentVirtualize] protected virtual bool TryActorWiggleUp(Entity entity) => default;
+        [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual new bool BlockedCheck() => default;
+        [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual bool TryActorWiggleUp(Entity entity) => default;
 
         protected virtual string EnterSFX => "event:/char/madeline/dreamblock_enter";
         protected virtual string TravelSFX => "event:/char/madeline/dreamblock_travel";

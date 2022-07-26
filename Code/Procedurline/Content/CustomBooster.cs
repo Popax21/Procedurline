@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Collections;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using Microsoft.Xna.Framework;
 
 using Monocle;
@@ -58,12 +59,12 @@ namespace Celeste.Mod.Procedurline {
         /// <summary>
         /// Make the player enter the booster.
         /// </summary>
-        protected virtual void MakePlayerEnter(Player player, BoostType boostType, float cantUseDelay = VanillaCantUseDelay) {
-            CantUseTimer = cantUseDelay;
+        protected virtual void MakePlayerEnter(Player player, BoostType boostType, float? cantUseDelay = VanillaCantUseDelay) {
+            if(cantUseDelay.HasValue) CantUseTimer = cantUseDelay.Value;
 
-            if(boostType != BoostType.CUSTOM) {
-                if(boostType == BoostType.GREEN_BOOST) player.Boost(this);
-                else player.RedBoost(this);
+            switch(boostType) {
+                case BoostType.GREEN_BOOST: player.Boost(this); break;
+                case BoostType.RED_BOOST: player.RedBoost(this); break;
             }
 
             Audio.Play(EnterSFX, Position);
@@ -87,15 +88,15 @@ namespace Celeste.Mod.Procedurline {
         /// The type of boost it should give them, or <c>null</c> if no default behaviour should take place.
         /// </returns>
         protected abstract BoostType? OnPlayerEnter(Player player);
-        [ContentVirtualize] protected virtual new void Appear() {}
+        [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual new void Appear() {}
         [ContentVirtualize(false)] protected virtual void AppearParticles() {
             //Modified vanilla code which uses custom particle types
             ParticleSystem particlesBG = SceneAs<Level>()?.ParticlesBG;
             if(particlesBG == null) return;
             for(int i = 0; i < 360; i += 30) particlesBG.Emit(AppearParticleType, 1, Center, Vector2.One * 2f, i * Calc.DegToRad);
         }
-        [ContentVirtualize] protected virtual new void Respawn() {}
-        [ContentVirtualize] protected virtual IEnumerator BoostRoutine(Player player, Vector2 dir) => default;
+        [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual new void Respawn() {}
+        [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual IEnumerator BoostRoutine(Player player, Vector2 dir) => default;
 
         [ContentVirtualize(false)] protected virtual void OnPlayer(Player player) {
             //Modified vanilla code
@@ -105,10 +106,10 @@ namespace Celeste.Mod.Procedurline {
                 MakePlayerEnter(player, boostType.Value);
             }
         }
-        [ContentVirtualize] protected virtual new void OnPlayerDashed(Vector2 dir) {}
-        [ContentVirtualize] protected virtual new void PlayerBoosted(Player player, Vector2 dir) {}
-        [ContentVirtualize] protected virtual new void PlayerReleased() {}
-        [ContentVirtualize] protected virtual new void PlayerDied() {}
+        [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual new void OnPlayerDashed(Vector2 dir) {}
+        [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual new void PlayerBoosted(Player player, Vector2 dir) {}
+        [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual new void PlayerReleased() {}
+        [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual new void PlayerDied() {}
 
         [ContentPatchSFX("Appear")] [ContentPatchSFX("Respawn")] protected virtual string AppearSFX => IsRed ? "event:/game/05_mirror_temple/redbooster_reappear" : "event:/game/04_cliffside/greenbooster_reappear";
         protected virtual string EnterSFX => IsRed ? "event:/game/05_mirror_temple/redbooster_enter" : "event:/game/04_cliffside/greenbooster_enter";
