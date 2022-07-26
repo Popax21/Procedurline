@@ -117,7 +117,7 @@ namespace Celeste.Mod.Procedurline {
         [ContentPatchSFX("PlayerBoosted")] protected virtual string MoveSFX => "event:/game/05_mirror_temple/redbooster_move";
         [ContentPatchSFX("PlayerReleased")] protected virtual string ReleasedSFX => IsRed ? "event:/game/05_mirror_temple/redbooster_end" : "event:/game/04_cliffside/greenbooster_end";
 
-        [ContentFieldProxy("respawnTimer")] protected float RespawnTimer { get; set; }
-        [ContentFieldProxy("cannotUseTimer")] protected float CantUseTimer { get; set; }
+        [ContentFieldProxy("respawnTimer")] protected float RespawnTimer { [MethodImpl(MethodImplOptions.NoInlining)] get; [MethodImpl(MethodImplOptions.NoInlining)] set; }
+        [ContentFieldProxy("cannotUseTimer")] protected float CantUseTimer { [MethodImpl(MethodImplOptions.NoInlining)] get; [MethodImpl(MethodImplOptions.NoInlining)] set; }
     }
 }

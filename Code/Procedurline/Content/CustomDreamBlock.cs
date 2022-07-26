@@ -461,12 +461,12 @@ namespace Celeste.Mod.Procedurline {
         protected virtual string BounceSFX => "event:/game/general/assist_dreamblockbounce";
         protected virtual string ExitSFX => "event:/char/madeline/dreamblock_exit";
 
-        [ContentFieldProxy("playerHasDreamDash")] public bool IsActivated { get; }
+        [ContentFieldProxy("playerHasDreamDash")] public bool IsActivated { [MethodImpl(MethodImplOptions.NoInlining)] get; }
 
-        [ContentFieldProxy("whiteFill")] protected float WhiteFill { get; set; }
-        [ContentFieldProxy("whiteHeight")] protected float WhiteHeight { get; set; }
+        [ContentFieldProxy("whiteFill")] protected float WhiteFill { [MethodImpl(MethodImplOptions.NoInlining)] get; [MethodImpl(MethodImplOptions.NoInlining)] set; }
+        [ContentFieldProxy("whiteHeight")] protected float WhiteHeight { [MethodImpl(MethodImplOptions.NoInlining)] get; [MethodImpl(MethodImplOptions.NoInlining)] set; }
 
-        [ContentFieldProxy("particles")] protected Array Particles { get; set; }
-        [ContentFieldProxy("particleTextures")] protected MTexture[] ParticleTextures { get; }
+        [ContentFieldProxy("particles")] protected Array Particles { [MethodImpl(MethodImplOptions.NoInlining)] get; [MethodImpl(MethodImplOptions.NoInlining)] set; }
+        [ContentFieldProxy("particleTextures")] protected MTexture[] ParticleTextures { [MethodImpl(MethodImplOptions.NoInlining)] get; }
     }
 }

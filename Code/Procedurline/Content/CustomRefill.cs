@@ -89,6 +89,6 @@ namespace Celeste.Mod.Procedurline {
         protected virtual string CollectSFX => DoubleRefill ? "event:/new_content/game/10_farewell/pinkdiamond_touch" : "event:/game/general/diamond_touch";
         [ContentPatchSFX("Respawn")] protected virtual string RespawnSFX => DoubleRefill ? "event:/new_content/game/10_farewell/pinkdiamond_return" : "event:/game/general/diamond_return";
 
-        [ContentFieldProxy("respawnTimer")] protected float RespawnTimer { get; set; }
+        [ContentFieldProxy("respawnTimer")] protected float RespawnTimer { [MethodImpl(MethodImplOptions.NoInlining)] get; [MethodImpl(MethodImplOptions.NoInlining)] set; }
     }
 }
