@@ -30,6 +30,7 @@ namespace Celeste.Mod.Procedurline.Demo {
             float entityX = level.Bounds.Left;
             float entityY = level.Bounds.Bottom - 8f * 8;
             level.Entities.Add(new DemoBooster(new Vector2(entityX + 4f * 8, entityY)));
+            level.Entities.Add(new DemoRefill(new Vector2(entityX + 8f * 8, entityY)));
         }
 
         [ContentILHook("Celeste.Mod.UI.OuiHelper_ChapterSelect_LevelSet", "Enter", true)]
