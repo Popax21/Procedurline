@@ -16,31 +16,35 @@ namespace Celeste.Mod.Procedurline {
         /// <summary>
         /// Registers a continuation handler, or invokes it immediately if the task already completed
         /// </summary>
-        public static void ContinueWithOrInvoke(this Task task, Action<Task> contHandler, CancellationToken token = default) {
+        public static Task ContinueWithOrInvoke(this Task task, Action<Task> contHandler, CancellationToken token = default) {
             int didInvoke = 0;
 
-            task.ContinueWith(t => {
+            Task cont = task.ContinueWith(t => {
                 if(Interlocked.Exchange(ref didInvoke, 1) == 0) contHandler(t);
             }, token);
 
             if(task.IsCompleted) {
                 if(Interlocked.Exchange(ref didInvoke, 1) == 0) contHandler(task);
             }
+
+            return cont;
         }
 
         /// <summary>
         /// Registers a continuation handler, or invokes it immediately if the task already completed
         /// </summary>
-        public static void ContinueWithOrInvoke<T>(this Task<T> task, Action<Task<T>> contHandler, CancellationToken token = default) {
+        public static Task ContinueWithOrInvoke<T>(this Task<T> task, Action<Task<T>> contHandler, CancellationToken token = default) {
             int didInvoke = 0;
 
-            task.ContinueWith(t => {
+            Task cont = task.ContinueWith(t => {
                 if(Interlocked.Exchange(ref didInvoke, 1) == 0) contHandler(t);
             }, token);
 
             if(task.IsCompleted) {
                 if(Interlocked.Exchange(ref didInvoke, 1) == 0) contHandler(task);
             }
+
+            return cont;
         }
 
         /// <summary>
