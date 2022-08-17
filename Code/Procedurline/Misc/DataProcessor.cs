@@ -25,7 +25,7 @@ namespace Celeste.Mod.Procedurline {
     }
 
     /// <summary>
-    /// Same as <see cref="IDataProcessor{T, I, D}" />, but async
+    /// Same as <see cref="IDataProcessor{T, I, D}" />, but asynchronous
     /// </summary>
     /// <seealso cref="IDataProcessor{T, I, D}" />>
     public interface IAsyncDataProcessor<T, I, D> : IDataScopeRegistrar<T> {
@@ -36,7 +36,7 @@ namespace Celeste.Mod.Procedurline {
     }
 
     /// <summary>
-    /// Implements an <see cref="IDataProcessor{T, I, D}" /> which simply invokes the delegates it's given
+    /// Implements an <see cref="IDataProcessor{T, I, D}" /> which simply invokes the delegates it's given.
     /// </summary>
     public class DelegateDataProcessor<T, I, D> : IDataProcessor<T, I, D> {
         public delegate void RegisterScopesDelegate(T target, DataScopeKey key);
@@ -72,6 +72,9 @@ namespace Celeste.Mod.Procedurline {
     public abstract class BaseCompositeDataProcessor<C, P, T> : IDataScopeRegistrar<T> where C : BaseCompositeDataProcessor<C, P, T> where P : class, IDataScopeRegistrar<T> {
         public sealed class ProcessorHandle : IDisposable {
             internal readonly object LOCK = new object();
+
+            public readonly C Composite;
+            public readonly int Order;
             private P processor;
 
             internal ProcessorHandle(C composite, int order, P processor) {
@@ -98,8 +101,6 @@ namespace Celeste.Mod.Procedurline {
                 lock(LOCK) processor = null;
             }
 
-            public C Composite { get; }
-            public int Order { get; }
             public P Processor => processor;
         }
 
@@ -109,7 +110,7 @@ namespace Celeste.Mod.Procedurline {
         protected readonly LinkedList<ProcessorHandle> processors = new LinkedList<ProcessorHandle>();
 
         /// <summary>
-        /// Adds a new processor to the composite processor. Duplicates are allowed.
+        /// Adds a new processor to the composite processor. Processors are invoked in increasing order of their <paramref name="order"/> parameter. Inserting the same processor multiple times is allowed.
         /// </summary>
         /// <returns>
         /// Returns a <see cref="ProcessorHandle" /> which can be used to remove the processor from the composite
@@ -133,6 +134,7 @@ namespace Celeste.Mod.Procedurline {
         protected void Lock() {
             lock(LOCK) {
                 if(numUsers++ == 0) {
+                    //Clean the list, by removing processors which were removed
                     for(LinkedListNode<ProcessorHandle> node = processors.First, nnode = node?.Next; node != null; node = nnode, nnode = node?.Next) {
                         lock(node.Value.LOCK) {
                             if(node.Value.Processor == null) processors.Remove(node);

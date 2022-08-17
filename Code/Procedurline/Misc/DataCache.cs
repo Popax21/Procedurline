@@ -11,7 +11,7 @@ namespace Celeste.Mod.Procedurline {
     /// It allows for queries for per-target data which can be shared between targets belonging to the same set of scopes (= having identical keys)
     /// The cache additionally keeps track of scope validity, and automatically disposed the scoped data if the key it belongs to gets invalidated.
     /// </summary>
-    public abstract class DataCache<T, D> : IDisposable where D : class, IDisposable {
+    public abstract class DataCache<T, D> : IScopedInvalidatable, IDisposable where D : class, IDisposable {
         public readonly object LOCK = new object();
         public readonly IDataScopeRegistrar<T> ScopeRegistrar;
 
@@ -77,6 +77,15 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
+        /// Checks if the cache has cached data for the given key
+        /// </summary>
+        public bool Contains(DataScopeKey key) {
+            lock(key.LOCK) lock(LOCK) {
+                return cache.ContainsKey(key);
+            }
+        }
+
+        /// <summary>
         /// Retrieves the associated scoped data for the given scope key.
         /// If there is no scoped data chached for the key, no new data is created, as the key alone doesn't hold enough information to create it.
         /// </summary>
@@ -86,15 +95,51 @@ namespace Celeste.Mod.Procedurline {
         public D GetScopedData(DataScopeKey key) {
             lock(key.LOCK) {
                 //Check if there is cached data
-                if(cache.TryGetValue(key, out D data)) return data;
+                lock(LOCK) if(cache.TryGetValue(key, out D data)) return data;
                 return null;
             }
         }
 
+        public void Invalidate() {
+            //Clear the cache
+            lock(LOCK) cache.Clear();
+            OnInvalidate?.Invoke(this);
+        }
+
+        /// <summary>
+        /// Invalidates just the specified key's scoped data in the cache. Invokes <see cref="OnInvalidateKey"/> if cached data was invalidated.
+        /// </summary>
+        /// <returns>
+        /// <c>true</c> if the cache contained cached data for the given key
+        /// </returns>
+        public bool Invalidate(DataScopeKey key) {
+            bool didInvalidate = false;
+            lock(key.LOCK) lock(LOCK) {
+                foreach(DataScopeKey k in cache.Keys) {
+                    if(k.Equals(key)) {
+                        k.Invalidate();
+                        didInvalidate = true;
+                        break;
+                    }
+                }
+            }
+
+            if(didInvalidate) OnInvalidateKey?.Invoke(this, key);
+            return didInvalidate;
+        }
+
+        public void InvalidateRegistrars() {
+            OnInvalidateRegistrars?.Invoke(this);
+        }
+
         private void KeyInvalidated(DataScopeKey key) {
             //Remove the key's scoped data from the cache
-            if(cache.TryRemove(key, out D data)) data.Dispose();
+            D data = null;
+            lock(LOCK) cache.TryRemove(key, out data);
+            data?.Dispose();
+
             key.Dispose();
+            OnInvalidateKey?.Invoke(this, key);
         }
 
         /// <summary>
@@ -116,6 +161,10 @@ namespace Celeste.Mod.Procedurline {
                 lock(LOCK) return cache == null;
             }
         }
+
+        public event Action<IScopedInvalidatable> OnInvalidate;
+        public event Action<DataCache<T,D>, DataScopeKey> OnInvalidateKey;
+        public event Action<IScopedInvalidatable> OnInvalidateRegistrars;
     }
 
     /// <summary>

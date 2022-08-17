@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Collections;
@@ -8,13 +7,35 @@ using System.Collections.Concurrent;
 
 namespace Celeste.Mod.Procedurline {
     /// <summary>
+    /// Represents something which has validity tie to or related to one or multiple data scopes, and as such can be invalidated. This can be scoped data, scope keys, or entire data scopes themselves.
+    /// </summary>
+    /// <seealso cref="DataScope" />
+    /// <seealso cref="IScopedData" />
+    public interface IScopedInvalidatable {
+        /// <summary>
+        /// Invalidates the object, reseting any cached data. Implementations must re-register all of their <see cref="DataScopeKey" /> (if they have any), and redo any processing they did, while also clearing any cached data, including that keyed using data scopes.
+        /// Invokes the <see cref="OnInvalidate" /> event.
+        /// </summary>
+        void Invalidate();
+
+        /// <summary>
+        /// Notifies the object of a registrar invalidation, which might cause the set of data scopes it tracks to to change. Implementations must re-register all of their <see cref="DataScopeKey" /> (if they have any), but advanced ones can keep their caches intact, as long as it is keyed using data scopes.
+        /// Invokes the <see cref="OnInvalidateRegistrars" /> event.
+        /// </summary>
+        void InvalidateRegistrars();
+
+        event Action<IScopedInvalidatable> OnInvalidate;
+        event Action<IScopedInvalidatable> OnInvalidateRegistrars;
+    }
+
+    /// <summary>
     /// Represents a data scope. Data scopes are collection of objects who share one or more properties.
     /// Objects are represented through "scope keys". Scope keys represent a specific configuration of scopes which are "registered" on the key.
     /// When a scope is invalidated, all registered scope keys get invalidated as well.
     /// </summary>
     /// <seealso cref="DataScopeKey" />
     /// <seealso cref="IDataScopeRegistrar{T}" />
-    public class DataScope : IDisposable, IReadOnlyCollection<DataScopeKey> {
+    public class DataScope : IScopedInvalidatable, IDisposable, IReadOnlyCollection<DataScopeKey> {
         internal readonly object LOCK = new object(); //Locking strategy: once a scope lock is held, you CAN NOT lock any other locks, neither scope nor key locks
         internal LinkedList<DataScopeKey> registeredKeys = new LinkedList<DataScopeKey>();
 
@@ -117,8 +138,8 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
-        public event Action<DataScope> OnInvalidate;
-        public event Action<DataScope> OnInvalidateRegistrars;
+        public event Action<IScopedInvalidatable> OnInvalidate;
+        public event Action<IScopedInvalidatable> OnInvalidateRegistrars;
     }
 
     /// <summary>
@@ -166,7 +187,7 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
-        /// Copy the scope key
+        /// Copy the scope key's set of registered scopes onto a different key, resetting it in the process. If the key is invalid, the destination key will also be once the operations finishes.
         /// </summary>
         public virtual void Copy(DataScopeKey dst) {
             void CopyInternal() {
@@ -177,7 +198,6 @@ namespace Celeste.Mod.Procedurline {
                     dst.Reset();
                     foreach(DataScope scope in scopes.Keys) {
                         lock(scope.LOCK) {
-                            if(isInvalidating) break;
                             dst.RegisterScope(scope);
                         }
                     }
@@ -197,8 +217,8 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
-        /// Called when this key is registered on a new scope
-        /// Both the scope and key lock are held, <b>so you CAN NOT call functions like <see cref="Invalidate" /> or <see cref="Reset" /></b>
+        /// Called when this key is registered on a new scope.
+        /// Both the scope lock (<see cref="DataScope.LOCK" />) and key lock (<see cref="LOCK" />) are held, <b>so you CAN NOT call functions like <see cref="Invalidate" /> or <see cref="Reset" /></b>
         /// </summary>
         /// <returns>
         /// <c>false</c> if the key couldn't be registered
@@ -219,8 +239,8 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
-        /// Invalidates the scope key. Invalidated scope keys can't be registered on new scopes or take ownership of objects until they're reset using Reset().
-        /// Also disposes all owned objects which the key took ownership of using <see cref="TakeOwnership" />.
+        /// Invalidates the scope key, invoking <see cref="OnInvalidate" /> . Invalidated scope keys can't be registered on new scopes or take ownership of objects until they're reset using <see cref="Reset" />.
+        /// Also disposes all owned objects which the key took ownership of using <see cref="TakeOwnership" />, including itself, if the key owns itself.
         /// <b>NOTE: Make sure you DO NOT hold any scope locks when calling this function, otherwise deadlocks could occur!</b>
         /// </summary>
         public virtual void Invalidate() {
@@ -261,7 +281,7 @@ namespace Celeste.Mod.Procedurline {
 
         /// <summary>
         /// Resets the scope key. This removes it from all scopes it's registered on and resets its validity, so that it can be used again in the future.
-        /// Also disposes all owned objects which the key took ownership of using <see cref="TakeOwnership" />, except itself, if the key owns itself.
+        /// Also disposes all owned objects which the key took ownership of using <see cref="TakeOwnership" />, except itself, if the key owns itself (but the key would no longer do so in the future).
         /// <b>NOTE: Make sure you DO NOT hold any scope locks when calling this function, otherwise deadlocks could occur!</b>
         /// </summary>
         public virtual void Reset() {
@@ -306,15 +326,19 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <returns>
-        /// Takes ownership of the given disposable objects. Owned objects are disposed when the key is invalidated or reset using <see cref="Invalidate" /> or <see cref="Reset" />.
+        /// Takes ownership of the given disposable object. Owned objects are disposed when the key is invalidated or reset using <see cref="Invalidate" /> or <see cref="Reset" />.
         /// If the key is already invalidated, the object is immediately disposed.
         /// If the object given is the key itself, then the key will automatically dispose itself when it's invalidated.
         /// </returns>
         public virtual void TakeOwnership(IDisposable obj) {
             lock(LOCK) {
                 if(scopes == null) throw new ObjectDisposedException("DataScopeKey");
-                if(!IsValid) obj.Dispose();
-                if(obj is DataScopeKey kobj && kobj == this) ownsSelf = true;
+                if(!IsValid) {
+                    obj.Dispose();
+                    return;
+                }
+
+                if(object.ReferenceEquals(obj, this)) ownsSelf = true;
                 else ownedObjects.Add(obj);
             }
         }
@@ -392,7 +416,7 @@ namespace Celeste.Mod.Procedurline {
     }
 
     /// <summary>
-    /// Represents something capable of registering appropiate scopes of a target on a given key
+    /// Represents something capable of registering the appropiate scopes of a target on a given key
     /// </summary>
     /// <seealso cref="DataScope" />
     /// <seealso cref="DataScopeKey" />
@@ -401,5 +425,19 @@ namespace Celeste.Mod.Procedurline {
         /// Register all scopes the target belongs to on the key
         /// </summary>
         void RegisterScopes(T target, DataScopeKey key);
+    }
+
+    /// <summary>
+    /// Represents data which belongs to a certain set of <see cref="DataScope" />s, represented by a <see cref="DataScopeKey" />.
+    /// The validity of the data is tied to the validity of its <see cref="ScopeKey" />, but can also be manually invalidated by using the methods provided by <see cref="IScopedInvalidatable" />.
+    /// On invalidation, implementations must re-register themselves on their appropiate set of scopes (e.g. by re-invoking <see cref="IDataScopeRegistrar{T}.RegisterScopes" />), and clear all cached data, as appropiate. 
+    /// </summary>
+    /// <seealso cref="DataScope" />
+    /// <seealso cref="DataScopeKey" />
+    public interface IScopedData : IScopedInvalidatable {
+        /// <summary>
+        /// Gets the <see cref="DataScopeKey" /> holding the set of <see cref="DataScope" />s the object's data currently belongs to. Invalidations of it should be treated the same as calls to <see cref="IScopedInvalidatable.Invalidate" /> or <see cref="IScopedInvalidatable.InvalidateRegistrars" />.
+        /// </summary>
+        DataScopeKey ScopeKey { get; }
     }
 }
