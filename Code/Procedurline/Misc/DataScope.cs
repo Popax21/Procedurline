@@ -10,7 +10,7 @@ namespace Celeste.Mod.Procedurline {
     /// Represents something which has validity tie to or related to one or multiple data scopes, and as such can be invalidated. This can be scoped data, scope keys, or entire data scopes themselves.
     /// </summary>
     /// <seealso cref="DataScope" />
-    /// <seealso cref="IScopedData" />
+    /// <seealso cref="DataScopeKey" />
     public interface IScopedInvalidatable {
         /// <summary>
         /// Invalidates the object, reseting any cached data. Implementations must re-register all of their <see cref="DataScopeKey" /> (if they have any), and redo any processing they did, while also clearing any cached data, including that keyed using data scopes.
@@ -425,19 +425,5 @@ namespace Celeste.Mod.Procedurline {
         /// Register all scopes the target belongs to on the key
         /// </summary>
         void RegisterScopes(T target, DataScopeKey key);
-    }
-
-    /// <summary>
-    /// Represents data which belongs to a certain set of <see cref="DataScope" />s, represented by a <see cref="DataScopeKey" />.
-    /// The validity of the data is tied to the validity of its <see cref="ScopeKey" />, but can also be manually invalidated by using the methods provided by <see cref="IScopedInvalidatable" />.
-    /// On invalidation, implementations must re-register themselves on their appropiate set of scopes (e.g. by re-invoking <see cref="IDataScopeRegistrar{T}.RegisterScopes" />), and clear all cached data, as appropiate. 
-    /// </summary>
-    /// <seealso cref="DataScope" />
-    /// <seealso cref="DataScopeKey" />
-    public interface IScopedData : IScopedInvalidatable {
-        /// <summary>
-        /// Gets the <see cref="DataScopeKey" /> holding the set of <see cref="DataScope" />s the object's data currently belongs to. Invalidations of it should be treated the same as calls to <see cref="IScopedInvalidatable.Invalidate" /> or <see cref="IScopedInvalidatable.InvalidateRegistrars" />.
-        /// </summary>
-        DataScopeKey ScopeKey { get; }
     }
 }
