@@ -24,13 +24,14 @@ namespace Celeste.Mod.Procedurline {
         public readonly bool OwnedByManager;
         internal int numReferences;
         private bool hasValidKey;
-        private bool staticSpriteHandlersRegistered;
+        private bool customSpriteRegistered;
 
         private bool didError = false;
         private Dictionary<string, Sprite.Animation> errorAnimations = new Dictionary<string, Sprite.Animation>(StringComparer.OrdinalIgnoreCase);
 
         private CancellationTokenSource cancelSrc;
         private Dictionary<string, Task<Sprite.Animation>> procTasks = new Dictionary<string, Task<Sprite.Animation>>(StringComparer.OrdinalIgnoreCase);
+        private Dictionary<string, IScopedInvalidatable> animInvals = new Dictionary<string, IScopedInvalidatable>(StringComparer.OrdinalIgnoreCase);
 
         internal ProcessedSprite(Sprite sprite, string spriteId, bool ownedByManager) {
             Sprite = sprite;
@@ -38,13 +39,13 @@ namespace Celeste.Mod.Procedurline {
             ScopeKey = new DataScopeKey();
             OwnedByManager = ownedByManager;
 
-            ScopeKey.OnInvalidate += OnInvalidate;
-            ScopeKey.OnInvalidateRegistrars += OnInvalidate;
+            ScopeKey.OnInvalidate += OnScopeInvalidate;
+            ScopeKey.OnInvalidateRegistrars += OnScopeInvalidate;
 
-            //If the sprite is a static sprite, register its handlers
-            if(sprite is StaticSprite staticSprite) {
-                staticSprite.RegisterHandlers();
-                staticSpriteHandlersRegistered = true;
+            //If the sprite is a custom sprite, register it
+            if(sprite is CustomSprite customSprite) {
+                customSprite.RegisterSprite(this);
+                customSpriteRegistered = true;
             }
 
             //Reload current animation
@@ -58,15 +59,15 @@ namespace Celeste.Mod.Procedurline {
                 cancelSrc?.Dispose();
                 cancelSrc = null;
 
-                procTasks = null;
+                ResetCache();
 
                 //Dispose the scope key
                 ScopeKey?.Dispose();
 
                 //If the sprite is a static sprite, unregister its handlers
-                if(Sprite is StaticSprite staticSprite && staticSpriteHandlersRegistered) {
-                    staticSprite.UnregisterHandlers();
-                    staticSpriteHandlersRegistered = false;
+                if(Sprite is CustomSprite customSprite && customSpriteRegistered) {
+                    customSprite.UnregisterSprite(this);
+                    customSpriteRegistered = false;
                 }
             }
         }
@@ -89,10 +90,17 @@ namespace Celeste.Mod.Procedurline {
                     ProcedurlineModule.SpriteManager.AnimationMixer.RegisterScopes(Sprite, ScopeKey);
                     hasValidKey = true;
                 }
-                //We might race and have an valid key outside of the loop, but in that case, our callbacks will reset our cache soon anyway
+                //We might race and not have an valid key outside of the loop, but in that case, our callbacks will reset our cache soon anyway
 
                 //Check for already running task
                 if(!procTasks.TryGetValue(animId, out Task<Sprite.Animation> procTask)) {
+                    //If the animation is invalidatable, register handlers
+                    if(origAnim is CustomSpriteAnimation customAnim && origAnim is IScopedInvalidatable invalAnim) {
+                        animInvals.Add(animId, invalAnim);
+                        invalAnim.OnInvalidate += OnAnimInvalidate;
+                        invalAnim.OnInvalidateRegistrars += OnAnimInvalidate;
+                    }
+
                     //Start new processor task
                     if(cancelSrc == null) cancelSrc = new CancellationTokenSource();
                     procTasks.Add(animId, procTask = GetProcessorTask(animId, origAnim, cancelSrc.Token));
@@ -194,22 +202,36 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
-        /// Resets the sprite's own cache of processor tasks.
+        /// Resets the sprite's own cache of processor tasks. If given, only resets one animation's task (note that it will still continue to process because of a design limitation).
         /// </summary>
-        public void ResetCache() {
+        public void ResetCache(string animId = null) {
             lock(LOCK) {
                 hasValidKey = false;
                 ScopeKey.Reset();
 
-                //Cancel tasks
-                cancelSrc?.Cancel();
-                cancelSrc?.Dispose();
-                cancelSrc = null;
-                procTasks.Clear();
+                if(animId == null) {
+                    //Cancel all tasks
+                    cancelSrc?.Cancel();
+                    cancelSrc?.Dispose();
+                    cancelSrc = null;
+                    procTasks.Clear();
+                } else {
+                    //If there are invalidation handlers, remove them
+                    if(animInvals.Remove(animId, out IScopedInvalidatable inval)) {
+                        inval.OnInvalidate += OnAnimInvalidate;
+                        inval.OnInvalidateRegistrars += OnAnimInvalidate;
+                    }
 
-                ReloadAnimation();
+                    //Remove the task
+                    procTasks.Remove(animId, out _);
+                }
+
+                ReloadAnimation(animId);
             }
         }
+
+        private void OnScopeInvalidate(IScopedInvalidatable key) => ResetCache();
+        private void OnAnimInvalidate(IScopedInvalidatable anim) => ResetCache(((CustomSpriteAnimation) anim).AnimationID);
 
         internal bool DrawDebug(Scene scene, Matrix mat, Dictionary<ProcessedSprite, Rectangle> rects, Dictionary<ProcessedSprite, Rectangle> nrects, bool layoutPass) {
             //Build string to be drawn
@@ -289,11 +311,6 @@ namespace Celeste.Mod.Procedurline {
                 Draw.SpriteBatch.DrawString(Draw.DefaultFont, str, new Vector2(rect.X + 6, rect.Y + 6), Color.White);
                 return false;
             }
-        }
-
-        private void OnInvalidate(IScopedInvalidatable key) {
-            //Our scope isn't valid anymore
-            ResetCache();
         }
 
         public bool IsDisposed {

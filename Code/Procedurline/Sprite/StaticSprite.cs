@@ -13,10 +13,10 @@ namespace Celeste.Mod.Procedurline {
     /// Represents statically processed sprites.
     /// Most of the actual logic is in <see cref="StaticSpriteAnimation" />, but this class is used to keep common data for all animations and provides the static sprite constructor.
     /// </summary>
-    public sealed class StaticSprite : Monocle.Sprite {
+    public sealed class StaticSprite : CustomSprite, IScopedInvalidatable, IDisposable {
         private static readonly FieldInfo Sprite_currentAnimation = typeof(Sprite).GetField("currentAnimation", BindingFlags.NonPublic | BindingFlags.Instance);
 
-        public readonly string SpriteID;
+        public readonly bool IsCopy;
         public readonly TextureScope TextureScope;
         public readonly Sprite OriginalSprite;
 
@@ -25,10 +25,8 @@ namespace Celeste.Mod.Procedurline {
         /// </summary> 
         public readonly IAsyncDataProcessor<Sprite, string, SpriteAnimationData> Processor;
 
-        public StaticSprite(string spriteId, Sprite origSprite, IAsyncDataProcessor<Sprite, string, SpriteAnimationData> processor, TextureScope texScope = null) : base(null, string.Empty) {
-            if(origSprite.GetType() != typeof(Sprite)) throw new ArgumentException($"Given sprite isn't a vanilla Monocle sprite! [type {origSprite.GetType()}]");
-
-            SpriteID = spriteId;
+        public StaticSprite(string spriteId, Sprite origSprite, IAsyncDataProcessor<Sprite, string, SpriteAnimationData> processor, TextureScope texScope = null) : base(spriteId, null, string.Empty) {
+            IsCopy = false;
             OriginalSprite = origSprite;
             TextureScope = new TextureScope(spriteId, texScope ?? ProcedurlineModule.TextureManager.StaticScope);
             Processor = processor;
@@ -38,9 +36,7 @@ namespace Celeste.Mod.Procedurline {
             //Replace animations
             foreach(string animId in Animations.Keys.ToArray()) {
                 Sprite.Animation anim = Animations[animId];
-                if(anim.GetType() != typeof(Sprite.Animation)) {
-                    Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Creating static sprite with original animation '{animId}' not being a vanilla Sprite.Animation - potential mod conflict! [type {anim.GetType()}]");
-                } else Animations[animId] = new StaticSpriteAnimation(this, animId, Animations[animId]);
+                Animations[animId] = new StaticSpriteAnimation(this, animId, Animations[animId]);
             }
 
             if(!string.IsNullOrEmpty(CurrentAnimationID)) {
@@ -48,8 +44,8 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
-        public StaticSprite(StaticSprite origSprite) : base(null, string.Empty) {
-            SpriteID = origSprite.SpriteID;
+        private StaticSprite(StaticSprite origSprite) : base(origSprite.SpriteID, null, string.Empty) {
+            IsCopy = true;
             OriginalSprite = origSprite.OriginalSprite;
             TextureScope = origSprite.TextureScope;
             Processor = origSprite.Processor;
@@ -69,21 +65,41 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
-        internal void RegisterHandlers() {
-            MainThreadHelper.Do(() => {
-                foreach(Sprite.Animation anim in Animations.Values) {
-                    if(anim is StaticSpriteAnimation staticAnim) staticAnim.RegisterHandlers();
-                }
-            });
+        public void Dispose() {
+            //Dispose animations
+            foreach(Sprite.Animation anim in Animations.Values) (anim as IDisposable)?.Dispose();
         }
 
-        internal void UnregisterHandlers() {
-            MainThreadHelper.Do(() => {
-                foreach(Sprite.Animation anim in Animations.Values) {
-                    if(anim is StaticSpriteAnimation staticAnim) staticAnim.UnregisterHandlers();
-                }
-            });
+        public override Monocle.Sprite CreateCopy() => new StaticSprite(this);
+
+        public override void RegisterSprite(ProcessedSprite procSprite) {
+            //Chain to original sprite
+            if(OriginalSprite is CustomSprite csprite) csprite.RegisterSprite(procSprite);
         }
+
+        public override void UnregisterSprite(ProcessedSprite procSprite) {
+            //Chain to original sprite
+            if(OriginalSprite is CustomSprite csprite) csprite.UnregisterSprite(procSprite);
+        }
+
+        public override void RegisterScopes(DataScopeKey key) {
+            ProcedurlineModule.GlobalScope.RegisterKey(key);
+            ProcedurlineModule.StaticScope.RegisterKey(key);
+            Processor.RegisterScopes(this, key);
+        }
+
+        public void Invalidate() {
+            foreach(Sprite.Animation anim in Animations.Values) (anim as IScopedInvalidatable)?.Invalidate();
+            OnInvalidate?.Invoke(this);
+        }
+
+        public void InvalidateRegistrars() {
+            foreach(Sprite.Animation anim in Animations.Values) (anim as IScopedInvalidatable)?.InvalidateRegistrars();
+            OnInvalidateRegistrars?.Invoke(this);
+        }
+
+        public event Action<IScopedInvalidatable> OnInvalidate;
+        public event Action<IScopedInvalidatable> OnInvalidateRegistrars;
     }
 
     /// <summary>
@@ -91,13 +107,11 @@ namespace Celeste.Mod.Procedurline {
     /// Statically processed sprite animations are used by e.g. custom boosters, but because of Procedurline's design still have to run asynchroniously.
     /// So this class is used to keep track of the processing task and potential scope invalidations.
     /// </summary>
-    public sealed class StaticSpriteAnimation : Sprite.Animation {
+    public sealed class StaticSpriteAnimation : CustomSpriteAnimation, IScopedInvalidatable, IDisposable {
         private static readonly Action<Sprite, MTexture> Sprite_SetFrame = (Action<Sprite, MTexture>) typeof(Sprite).GetMethod("SetFrame", BindingFlags.NonPublic | BindingFlags.Instance).CreateDelegate(typeof(Action<Sprite, MTexture>));
 
-        public readonly object LOCK = new object();
-
+        public bool IsDisposed { get; private set; }
         public readonly StaticSprite Sprite;
-        public readonly string AnimationID;
         public readonly Sprite.Animation OriginalAnimation;
 
         private readonly DataScopeKey scopeKey;
@@ -107,11 +121,12 @@ namespace Celeste.Mod.Procedurline {
 
         private Sprite.Animation dummyAnim, errorAnim;
 
-        internal StaticSpriteAnimation(StaticSprite sprite, string animId, Sprite.Animation origAnim) {
+        internal StaticSpriteAnimation(StaticSprite sprite, string animId, Sprite.Animation origAnim) : base(animId) {
             Sprite = sprite;
-            AnimationID = animId;
             OriginalAnimation = origAnim;
             scopeKey = new DataScopeKey();
+            scopeKey.OnInvalidate += _ => OnInvalidate?.Invoke(this);
+            scopeKey.OnInvalidateRegistrars += k => k.Invalidate();
 
             //Setup dummy animation
             dummyAnim = new Sprite.Animation() {
@@ -123,11 +138,16 @@ namespace Celeste.Mod.Procedurline {
             Delay = dummyAnim.Delay;
             Goto = dummyAnim.Goto;
             Frames = dummyAnim.Frames;
+
+            //Add invalidation handlers
+            if(origAnim is IScopedInvalidatable invalAnim) {
+                invalAnim.OnInvalidate += OrigInvalidated;
+                invalAnim.OnInvalidateRegistrars += OrigInvalidated;
+            }
         }
 
-        public StaticSpriteAnimation(StaticSprite sprite, StaticSpriteAnimation origAnim) {
+        internal StaticSpriteAnimation(StaticSprite sprite, StaticSpriteAnimation origAnim) : base(origAnim.AnimationID) {
             Sprite = sprite;
-            AnimationID = origAnim.AnimationID;
             OriginalAnimation = origAnim;
 
             //Copy state of original animation
@@ -136,35 +156,37 @@ namespace Celeste.Mod.Procedurline {
             Frames = origAnim.Frames;
         }
 
-        internal void RegisterHandlers() {
-            if(OriginalAnimation is StaticSpriteAnimation staticAnim) staticAnim.OnReplaceAnimation += ReplaceAnimation;
+        public void Dispose() {
+            lock(LOCK) {
+                if(IsDisposed) return;
+                IsDisposed = true;
+
+                scopeKey.Dispose();
+                procTaskCancelSrc.Cancel();
+                procTaskCancelSrc.Dispose();
+                texHandle?.Dispose();
+                texHandle = null;
+
+                //Remove invalidation handlers
+                if(OriginalAnimation is IScopedInvalidatable invalAnim) {
+                    invalAnim.OnInvalidate -= OrigInvalidated;
+                    invalAnim.OnInvalidateRegistrars -= OrigInvalidated;
+                }
+            }
         }
 
-        internal void UnregisterHandlers() {
-            if(OriginalAnimation is StaticSpriteAnimation staticAnim) staticAnim.OnReplaceAnimation -= ReplaceAnimation;
-        }
-
-        /// <summary>
-        /// Returns the task processing the static animation, or if none is running, starts it.
-        /// </summary>
-        public Task GetProcessorTask() => GetProcessorTask(out _);
-
-        /// <summary>
-        /// Returns the task processing the static animation, or if none is running, starts it.
-        /// </summary>
-        public Task GetProcessorTask(out bool startedProcessing) {
-            if(OriginalAnimation is StaticSpriteAnimation staticAnim) {
-                //Forward to original static animation
-                return staticAnim.GetProcessorTask(out startedProcessing);
+        public override Task UpdateAnimation() {
+            if(Sprite.IsCopy && OriginalAnimation is CustomSpriteAnimation customAnim) {
+                //Forward to original animation
+                return customAnim.UpdateAnimation().ContinueWithOrInvoke(_ => {
+                    lock(LOCK) ReplaceAnimation(customAnim);
+                });
             }
 
             lock(LOCK) {
                 lock(scopeKey.LOCK) {
                     lock(scopeKey.VALIDITY_LOCK) {
-                        if(scopeKey.IsValid && processorTask != null) {
-                            startedProcessing = false;
-                            return processorTask;
-                        }
+                        if(scopeKey.IsValid && processorTask != null) return processorTask;
                     }
 
                     //Cancel old processor task
@@ -179,11 +201,9 @@ namespace Celeste.Mod.Procedurline {
                     ReplaceAnimation(dummyAnim, null, token);
 
                     retryKey:;
-                    //Reset scope key and register new scopes
+                    //Reset scope key and register the sprite's scopes
                     scopeKey.Reset();
-                    ProcedurlineModule.GlobalScope.RegisterKey(scopeKey);
-                    ProcedurlineModule.StaticScope.RegisterKey(scopeKey);
-                    Sprite.Processor.RegisterScopes(Sprite, scopeKey);
+                    Sprite.RegisterScopes(scopeKey);
                     lock(scopeKey.VALIDITY_LOCK) {
                         if(!scopeKey.IsValid) {
                             //Could happen because of race conditions
@@ -201,7 +221,6 @@ namespace Celeste.Mod.Procedurline {
                             ProcedurlineModule.GlobalManager.BlockEngineOnTask(processorTask);
                         }
 
-                        startedProcessing = true;
                         return processorTask;
                     }
                 }
@@ -275,7 +294,6 @@ namespace Celeste.Mod.Procedurline {
                         if(token.IsCancellationRequested) return;
 
                         ReplaceAnimation(anim);
-                        OnReplaceAnimation?.Invoke(anim);
 
                         //Set texture handle
                         texHandle?.Dispose();
@@ -290,7 +308,7 @@ namespace Celeste.Mod.Procedurline {
             return complSrc.Task;
         }
 
-        private void ReplaceAnimation(Sprite.Animation anim)  {
+        private void ReplaceAnimation(Sprite.Animation anim) {
             Delay = anim.Delay;
             Goto = anim.Goto;
             Frames = anim.Frames;
@@ -319,6 +337,14 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
-        private event Action<Sprite.Animation> OnReplaceAnimation;
+        public void Invalidate() {
+            lock(LOCK) scopeKey.Invalidate();
+        }
+        public void InvalidateRegistrars() => Invalidate();
+
+        private void OrigInvalidated(IScopedInvalidatable obj) => Invalidate();
+
+        public event Action<IScopedInvalidatable> OnInvalidate;
+        public event Action<IScopedInvalidatable> OnInvalidateRegistrars;
     }
 }

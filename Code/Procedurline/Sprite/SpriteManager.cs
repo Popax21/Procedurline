@@ -28,11 +28,8 @@ namespace Celeste.Mod.Procedurline {
             public void RegisterScopes(Sprite target, DataScopeKey key) {
                 Manager.AnimationProcessor.RegisterScopes(target, key);
 
-                //If the sprite is a static sprite, register its scopes as well
-                if(target is StaticSprite staticSprite) {
-                    ProcedurlineModule.StaticScope.RegisterKey(key);
-                    staticSprite.Processor.RegisterScopes(staticSprite, key);
-                }
+                //If the sprite is a custom one, register its scopes on the key as well
+                if(target is CustomSprite customSprite) customSprite.RegisterScopes(key);
             }
 
             public Task<bool> ProcessDataAsync(Sprite sprite, DataScopeKey key, string animId, AsyncRef<Sprite.Animation> animRef, CancellationToken token = default) {
@@ -183,19 +180,19 @@ namespace Celeste.Mod.Procedurline {
             Chooser<string> animGoto;
             MTexture[] animFrames;
 
-            if(anim is StaticSpriteAnimation staticAnim) {
-                //Wait for the animation to finish processing
+            if(anim is CustomSpriteAnimation customAnim) {
+                //Wait for the animation to finish updating
                 try {
-                    await staticAnim.GetProcessorTask().OrCancelled(token);
+                    await customAnim.UpdateAnimation().OrCancelled(token);
                 } catch(Exception e) {
                     //Static animation processing exceptions aren't our responsibility
                     Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Trying to get sprite animation data for failed processed static sprite animation: {e}");
                 }
 
-                lock(staticAnim) {
-                    animDelay = staticAnim.Delay;
-                    animGoto = staticAnim.Goto;
-                    animFrames = staticAnim.Frames;
+                lock(customAnim.LOCK) {
+                    animDelay = customAnim.Delay;
+                    animGoto = customAnim.Goto;
+                    animFrames = customAnim.Frames;
                 }
             } else {
                 animDelay = anim.Delay;
@@ -319,8 +316,8 @@ namespace Celeste.Mod.Procedurline {
         /// <c>null</c> if the sprite doesn't have an unique ID
         /// </returns>
         public string GetSpriteID(Sprite sprite) {
-            //If the sprite is a static sprite, return its ID
-            if(sprite is StaticSprite staticSprite) return staticSprite.SpriteID;
+            //If the sprite is a custom sprite, return its ID
+            if(sprite is CustomSprite customSprite) return customSprite.SpriteID;
 
             //Check sprite ID table
             if(spriteIds.TryGetValue(sprite, out string spriteId)) return spriteId;
@@ -429,7 +426,7 @@ namespace Celeste.Mod.Procedurline {
         }
 
         private Sprite SpriteCreateCloneHook(On.Monocle.Sprite.orig_CreateClone orig, Sprite sprite) {
-            if(sprite is StaticSprite staticSprite) return new StaticSprite(staticSprite);
+            if(sprite is CustomSprite customSprite) return customSprite.CreateCopy();
             return orig(sprite);
         }
 
