@@ -132,7 +132,9 @@ namespace Celeste.Mod.Procedurline {
             OnInvalidateRegistrars?.Invoke(this);
         }
 
-        private void KeyInvalidated(DataScopeKey key) {
+        private void KeyInvalidated(IScopedInvalidatable inval) {
+            DataScopeKey key = (DataScopeKey) inval;
+
             //Remove the key's scoped data from the cache
             D data = null;
             lock(LOCK) cache.TryRemove(key, out data);

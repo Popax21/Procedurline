@@ -146,7 +146,7 @@ namespace Celeste.Mod.Procedurline {
     /// Represents a data scope key. For details, see <c cref="DataScope">DataScope</c>
     /// </summary>
     /// <seealso cref="DataScope" />
-    public class DataScopeKey : IDisposable, IEquatable<DataScopeKey>, IReadOnlyCollection<DataScope> {
+    public class DataScopeKey : IScopedInvalidatable, IDisposable, IEquatable<DataScopeKey>, IReadOnlyCollection<DataScope> {
         private const int HASH_MAGIC = unchecked((int) 0xcafec0de);
         private static long NEXT_ID = 0;
 
@@ -407,12 +407,12 @@ namespace Celeste.Mod.Procedurline {
         /// <summary>
         /// Invoked by <seealso cref="Invalidate" /> when the key is invalidated before disposing owned objects, with <see cref="DataScopeKey.LOCK" /> held.
         /// </summary>
-        public event Action<DataScopeKey> OnInvalidate;
+        public event Action<IScopedInvalidatable> OnInvalidate;
 
         /// <summary>
         /// Invoked by <seealso cref="InvalidateRegistrars" /> when the key's registrars are invalidated, with <see cref="DataScopeKey.LOCK" /> held.
         /// </summary>
-        public event Action<DataScopeKey> OnInvalidateRegistrars;
+        public event Action<IScopedInvalidatable> OnInvalidateRegistrars;
     }
 
     /// <summary>

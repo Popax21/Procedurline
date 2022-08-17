@@ -291,7 +291,7 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
-        private void OnInvalidate(DataScopeKey key) {
+        private void OnInvalidate(IScopedInvalidatable key) {
             //Our scope isn't valid anymore
             ResetCache();
         }
