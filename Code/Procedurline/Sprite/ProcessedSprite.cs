@@ -60,6 +60,8 @@ namespace Celeste.Mod.Procedurline {
                 cancelSrc = null;
 
                 ResetCache();
+                procTasks = null;
+                animInvals = null;
 
                 //Dispose the scope key
                 ScopeKey?.Dispose();
@@ -210,6 +212,13 @@ namespace Celeste.Mod.Procedurline {
                 ScopeKey.Reset();
 
                 if(animId == null) {
+                    //Remove the invalidation handlers
+                    foreach(IScopedInvalidatable inval in animInvals.Values) {
+                        inval.OnInvalidate += OnAnimInvalidate;
+                        inval.OnInvalidateRegistrars += OnAnimInvalidate;
+                    }
+                    animInvals.Clear();
+
                     //Cancel all tasks
                     cancelSrc?.Cancel();
                     cancelSrc?.Dispose();
