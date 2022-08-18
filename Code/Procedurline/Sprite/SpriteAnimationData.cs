@@ -7,7 +7,7 @@ using Monocle;
 
 namespace Celeste.Mod.Procedurline {
     /// <summary>
-    /// Contains and wraps sprite animation data in a more accesible way
+    /// Contains and wraps sprite animation data in a more easily accesible way
     /// </summary>
     public class SpriteAnimationData : IDisposable {
         /// <summary>

@@ -3,7 +3,6 @@ using System.Text;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Reflection;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 
@@ -15,8 +14,6 @@ namespace Celeste.Mod.Procedurline {
     /// Processed sprites are responsible for integrating the backend sprite animation processing logic with the "frontend" <see cref="Sprite" /> / <see cref="CustomSprite" /> objects, by handling animation hooks, animation invalidation, async processing, etc.
     /// </summary>
     public sealed class ProcessedSprite : IDisposable {
-        private static readonly FieldInfo Sprite_currentAnimation = typeof(Sprite).GetField("currentAnimation", BindingFlags.NonPublic | BindingFlags.Instance);
-
         public readonly object LOCK = new object();
         public readonly Sprite Sprite;
         public readonly string SpriteID;
@@ -47,8 +44,11 @@ namespace Celeste.Mod.Procedurline {
                 customSpriteRegistered = true;
             }
 
-            //Reload current animation
-            ReloadAnimation();
+            //Reload current animation on the next frame
+            MainThreadHelper.GetForceQueue<object>(() => {
+                Sprite.ReloadAnimation();
+                return Sprite;
+            });
         }
 
         public void Dispose() {
@@ -98,8 +98,9 @@ namespace Celeste.Mod.Procedurline {
                     if(cancelSrc == null) cancelSrc = new CancellationTokenSource();
                     procTasks.Add(animId, procTask = GetProcessorTask(animId, origAnim, cancelSrc.Token));
                     procTask.ContinueWithOrInvoke(t => {
-                        if(t.Status == TaskStatus.RanToCompletion) ReloadAnimation(animId);
-                        else if(t.Exception != null) {
+                        if(t.Status == TaskStatus.RanToCompletion) {
+                            MainThreadHelper.Do(() => Sprite.ReloadAnimation());  
+                        } else if(t.Exception != null) {
                             Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Error processing sprite '{SpriteID}' animation '{animId}': {t.Exception}");
                         }
                     }, cancelSrc.Token);
@@ -147,73 +148,31 @@ namespace Celeste.Mod.Procedurline {
         }
 
         private async Task<Sprite.Animation> GetProcessorTask(string animId, Sprite.Animation origAnim, CancellationToken token) {
+            //Process the original animation
             AsyncRef<Sprite.Animation> animRef = new AsyncRef<Sprite.Animation>(origAnim);
             await ProcedurlineModule.SpriteManager.AnimationMixer.ProcessDataAsync(Sprite, ScopeKey, animId, animRef, token);
+
+            //If the returned animation is a custom animation, make sure it finished processing
+            if(animRef.Data is CustomSpriteAnimation customAnim) await customAnim.UpdateData();
+
             return animRef.Data;
         }
 
         /// <summary>
-        /// Reloads the sprite's current animation, if its ID is the one specified.
-        /// If the animation ID is <c>null</c>, then reload no matter the current animation.
+        /// Resets the sprite's own cache of processor tasks.
         /// </summary>
-        public void ReloadAnimation(string animId = null) {
-            MainThreadHelper.Do(() => {
-                lock(LOCK) {
-                    if(procTasks == null) return;
-
-                    string curAnim = Sprite.CurrentAnimationID;
-                    if(!Sprite.Animating || string.IsNullOrEmpty(curAnim)) curAnim = Sprite.LastAnimationID;
-                    if(!string.IsNullOrEmpty(curAnim) && (animId == null || curAnim == animId)) {
-                        Sprite.Texture = null;
-
-                        //Reload the animation
-                        Sprite.Animation anim = GetAnimation(curAnim);
-                        if(anim == null) {
-                            //The animation we were playing got erased
-                            Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Currently playing sprite animation '{curAnim}' [sprite '{Sprite.Path}'] got erased after reload!");
-                            Sprite.Stop();
-                        } else {
-                            if(Sprite.Animating && !string.IsNullOrEmpty(Sprite.CurrentAnimationID)) {
-                                Sprite_currentAnimation.SetValue(Sprite, anim);
-                                if(Sprite.CurrentAnimationFrame < anim.Frames.Length) {
-                                    Sprite.Texture = anim.Frames[Sprite.CurrentAnimationFrame];
-                                }
-                            } else if(Sprite.CurrentAnimationFrame < anim.Frames.Length-1) {
-                                //The animation's length increased
-                                int oldFrame = Sprite.CurrentAnimationFrame;
-                                Sprite.Play(curAnim, true, false);
-                                Sprite.SetAnimationFrame(oldFrame);
-                            } else {
-                                Sprite.Texture = anim.Frames[anim.Frames.Length - 1];
-                            }
-                        }
-
-                        OnAnimationReload?.Invoke(this, animId);
-                    }
-                }
-            });
-        }
-
-        /// <summary>
-        /// Resets the sprite's own cache of processor tasks. If given, only resets one animation's task (note that it will still continue to process because of a design limitation).
-        /// </summary>
-        public void ResetCache(string animId = null) {
+        public void ResetCache() {
             lock(LOCK) {
                 hasValidKey = false;
                 ScopeKey.Reset();
 
-                if(animId == null) {
-                    //Cancel all tasks
-                    cancelSrc?.Cancel();
-                    cancelSrc?.Dispose();
-                    cancelSrc = null;
-                    procTasks.Clear();
-                } else {
-                    //Remove the task
-                    procTasks.Remove(animId, out _);
-                }
+                //Cancel all tasks
+                cancelSrc?.Cancel();
+                cancelSrc?.Dispose();
+                cancelSrc = null;
+                procTasks.Clear();
 
-                ReloadAnimation(animId);
+                MainThreadHelper.Do(() => Sprite.ReloadAnimation());
             }
         }
 
@@ -242,7 +201,7 @@ namespace Celeste.Mod.Procedurline {
             lock(LOCK) {
                 str.AppendLine($"CACHE {procTasks.Count} ({procTasks.Count(kv => !kv.Value.IsCompleted)} pend)");
                 if(didError) str.AppendLine("!!!ERROR!!!");
-                str.Append(ScopeKey.GetScopeListString("\n"));
+                str.Append(hasValidKey ? ScopeKey.GetScopeListString("\n") : "<<<INVAL KEY>>>");
             }
 
             if(layoutPass) {
@@ -304,7 +263,5 @@ namespace Celeste.Mod.Procedurline {
                 lock(LOCK) return procTasks != null;
             }
         }
-
-        public event Action<ProcessedSprite, string> OnAnimationReload;
     }
 }

@@ -6,7 +6,7 @@ namespace Celeste.Mod.Procedurline {
     /// <summary>
     /// Implements an <see cref="AsyncDataProcessorCache{T, I, D}" /> which caches sprite animations.
     /// An extra subclass is required because sprites require the use of <see cref="SpriteScopeKey" /> instead of the default <see cref="DataScopeKey" />.
-    /// It also takes care of creating sprite scopes per scoped cache wich can be used to store the processed frame textures.
+    /// It also takes care of creating texture scopes per scoped cache wich can be used to store the processed frame textures.
     /// </summary>
     public class SpriteAnimationCache : AsyncDataProcessorCache<Sprite, string, Sprite.Animation> {
         public new class ScopedCache : AsyncDataProcessorCache<Sprite, string, Sprite.Animation>.ScopedCache {

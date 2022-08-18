@@ -27,9 +27,6 @@ namespace Celeste.Mod.Procedurline {
 
             public void RegisterScopes(Sprite target, DataScopeKey key) {
                 Manager.AnimationProcessor.RegisterScopes(target, key);
-
-                //If the sprite is a custom one, register its scopes on the key as well
-                if(target is CustomSprite customSprite) customSprite.RegisterScopes(key);
             }
 
             public Task<bool> ProcessDataAsync(Sprite sprite, DataScopeKey key, string animId, AsyncRef<Sprite.Animation> animRef, CancellationToken token = default) {
@@ -72,6 +69,11 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
+        /// <summary>
+        /// Contains the animation mixer processor. It is the main entry point for dynamic animation processing, and also invokes the <see cref="AnimationProcessor" /> at order 0.
+        /// By adding processor to it you can "mix" the animations displayed for any sprite instance by swapping the <see cref="Sprite.Animation" /> instances with arbitrary other ones.
+        /// <b>NOTE: If you mix in <see cref="CustomSpriteAnimation" /> instances, you HAVE TO register the <see cref="CustomSprite" />'s scopes by calling <see cref="CustomSprite.RegisterScopes" />. While Procedurline ensures that custom sprite processing has finished before utilizing any animation data, it DOES NOT forward custom sprite invalidation, which you HAVE TO do manually.</b>
+        /// </summary>
         public readonly CompositeAsyncDataProcessor<Sprite, string, Sprite.Animation> AnimationMixer;
         public readonly CompositeAsyncDataProcessor<Sprite, string, SpriteAnimationData> AnimationProcessor;
         public readonly SpriteAnimationCache AnimationCache;
@@ -183,17 +185,20 @@ namespace Celeste.Mod.Procedurline {
             if(anim is CustomSpriteAnimation customAnim) {
                 //Wait for the animation to finish updating
                 try {
-                    await customAnim.UpdateAnimation().OrCancelled(token);
+                    await customAnim.UpdateData().OrCancelled(token);
                 } catch(Exception e) {
                     //Static animation processing exceptions aren't our responsibility
                     Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Trying to get sprite animation data for failed processed static sprite animation: {e}");
                 }
 
-                lock(customAnim.LOCK) {
-                    animDelay = customAnim.Delay;
-                    animGoto = customAnim.Goto;
-                    animFrames = customAnim.Frames;
-                }
+                //We have to get the animation's data on the main thread
+                TaskCompletionSource<Tuple<float, Chooser<string>, MTexture[]>> tcs = new TaskCompletionSource<Tuple<float, Chooser<string>, MTexture[]>>();
+                MainThreadHelper.Do(() => tcs.SetResult(new Tuple<float, Chooser<string>, MTexture[]>(customAnim.Delay, customAnim.Goto, customAnim.Frames)));
+
+                Tuple<float, Chooser<string>, MTexture[]> data = await tcs.Task;
+                animDelay = data.Item1;
+                animGoto = data.Item2;
+                animFrames = data.Item3;
             } else {
                 animDelay = anim.Delay;
                 animGoto = anim.Goto;
@@ -365,6 +370,9 @@ namespace Celeste.Mod.Procedurline {
         private void RegisterDefaultScopes(Sprite sprite, DataScopeKey key) {
             ProcedurlineModule.GlobalScope.RegisterKey(key);
             if(sprite is PlayerSprite || sprite.Entity is Player) ProcedurlineModule.PlayerScope.RegisterKey(key);
+
+            //If the sprite is a custom one, register its scopes on the key as well
+            if(sprite is CustomSprite customSprite) customSprite.RegisterScopes(key);
         }
 
         private void AddSpriteRef(Sprite sprite) {
@@ -431,8 +439,11 @@ namespace Celeste.Mod.Procedurline {
         }
 
         private Sprite SpriteCloneIntoHook(On.Monocle.Sprite.orig_CloneInto orig, Sprite sprite, Sprite target) {
-            if(sprite is CustomSprite) throw new ArgumentException($"Can't use Sprite.CloneInto on a custom sprite of type '{sprite.GetType()}'!");
-            if(target is CustomSprite) throw new ArgumentException($"Can't use Sprite.CloneInto targeting a custom sprite of type '{target.GetType()}'!");
+            //Check for custom sprites, unless this is an unsafe clone
+            if(SpriteUtils.UnsafeCloneSource != sprite || SpriteUtils.UnsafeCloneTarget != target) {
+                if(sprite is CustomSprite) throw new ArgumentException($"Can't use Sprite.CloneInto on a custom sprite of type '{sprite.GetType()}'!");
+                if(target is CustomSprite) throw new ArgumentException($"Can't use Sprite.CloneInto targeting a custom sprite of type '{target.GetType()}'!");
+            } else SpriteUtils.UnsafeCloneSource = SpriteUtils.UnsafeCloneTarget = null;
 
             Sprite clone = orig(sprite, target);
             spriteIds.Remove(clone);
@@ -449,6 +460,7 @@ namespace Celeste.Mod.Procedurline {
         }
 
         private Sprite SpriteBankCreateOnHook(On.Monocle.SpriteBank.orig_CreateOn orig, SpriteBank bank, Sprite sprite, string id) {
+            //Check for custom sprites
             if(sprite is CustomSprite) throw new ArgumentException($"Can't use SpriteBank.CreateOn on a custom sprite of type '{sprite.GetType()}'!");
 
             Sprite sprt = orig(bank, sprite, id);

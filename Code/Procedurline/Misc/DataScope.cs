@@ -7,22 +7,12 @@ using System.Collections.Concurrent;
 
 namespace Celeste.Mod.Procedurline {
     /// <summary>
-    /// Represents something which has validity tied to or related to one or multiple data scopes, and as such can be invalidated. This can be scoped data, scope keys, or entire data scopes themselves.
-    /// <b>You MUST NOT rely on the events provided by this interface to implement the actual invalidation mechanism which use the <see cref="DataScopeKey" /> mechanism. This is bad design, and will only cause problems. This interface is intended to manually override that mechanism and forcefully cause an invalidation, not to replace the properly designed data scope mechanism.</b>
+    /// Represents something which has validity tied to or related to one or multiple data scopes, and as such can be invalidated. This can be scope keys, or entire data scopes themselves.
     /// </summary>
     /// <seealso cref="DataScope" />
     /// <seealso cref="DataScopeKey" />
     public interface IScopedInvalidatable {
-        /// <summary>
-        /// Invalidates the object, reseting any cached data. Implementations must re-register all of their <see cref="DataScopeKey" /> (if they have any), and redo any processing they did, while also clearing any cached data, including that keyed using data scopes.
-        /// Invokes the <see cref="OnInvalidate" /> event.
-        /// </summary>
         void Invalidate();
-
-        /// <summary>
-        /// Notifies the object of a registrar invalidation, which might cause the set of data scopes it tracks to to change. Implementations must re-register all of their <see cref="DataScopeKey" /> (if they have any), but advanced ones can keep their caches intact, as long as it is keyed using data scopes.
-        /// Invokes the <see cref="OnInvalidateRegistrars" /> event.
-        /// </summary>
         void InvalidateRegistrars();
 
         event Action<IScopedInvalidatable> OnInvalidate;
