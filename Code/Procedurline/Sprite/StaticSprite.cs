@@ -142,12 +142,6 @@ namespace Celeste.Mod.Procedurline {
             Delay = dummyAnim.Delay;
             Goto = dummyAnim.Goto;
             Frames = dummyAnim.Frames;
-
-            //Add invalidation handlers
-            if(origAnim is IScopedInvalidatable invalAnim) {
-                invalAnim.OnInvalidate += OrigInvalidated;
-                invalAnim.OnInvalidateRegistrars += OrigInvalidated;
-            }
         }
 
         internal StaticSpriteAnimation(StaticSprite sprite, StaticSpriteAnimation origAnim) : base(origAnim.AnimationID) {
@@ -170,12 +164,6 @@ namespace Celeste.Mod.Procedurline {
                 procTaskCancelSrc.Dispose();
                 texHandle?.Dispose();
                 texHandle = null;
-
-                //Remove invalidation handlers
-                if(OriginalAnimation is IScopedInvalidatable invalAnim) {
-                    invalAnim.OnInvalidate -= OrigInvalidated;
-                    invalAnim.OnInvalidateRegistrars -= OrigInvalidated;
-                }
             }
         }
 
@@ -345,8 +333,6 @@ namespace Celeste.Mod.Procedurline {
             lock(LOCK) scopeKey.Invalidate();
         }
         public void InvalidateRegistrars() => Invalidate();
-
-        private void OrigInvalidated(IScopedInvalidatable obj) => Invalidate();
 
         public event Action<IScopedInvalidatable> OnInvalidate;
         public event Action<IScopedInvalidatable> OnInvalidateRegistrars;

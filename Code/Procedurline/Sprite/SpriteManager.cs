@@ -431,9 +431,13 @@ namespace Celeste.Mod.Procedurline {
         }
 
         private Sprite SpriteCloneIntoHook(On.Monocle.Sprite.orig_CloneInto orig, Sprite sprite, Sprite target) {
+            if(sprite is CustomSprite) throw new ArgumentException($"Can't use Sprite.CloneInto on a custom sprite of type '{sprite.GetType()}'!");
+            if(target is CustomSprite) throw new ArgumentException($"Can't use Sprite.CloneInto targeting a custom sprite of type '{target.GetType()}'!");
+
             Sprite clone = orig(sprite, target);
             spriteIds.Remove(clone);
             if(GetSpriteID(sprite) is string spriteId) spriteIds.Add(clone, spriteId);
+            GetProcessedSprite(clone)?.ResetCache();
             return clone;
         }
 
@@ -445,6 +449,8 @@ namespace Celeste.Mod.Procedurline {
         }
 
         private Sprite SpriteBankCreateOnHook(On.Monocle.SpriteBank.orig_CreateOn orig, SpriteBank bank, Sprite sprite, string id) {
+            if(sprite is CustomSprite) throw new ArgumentException($"Can't use SpriteBank.CreateOn on a custom sprite of type '{sprite.GetType()}'!");
+
             Sprite sprt = orig(bank, sprite, id);
             spriteIds.Remove(sprt);
             spriteIds.Add(sprt, id);

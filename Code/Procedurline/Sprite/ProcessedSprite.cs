@@ -12,7 +12,7 @@ using Monocle;
 namespace Celeste.Mod.Procedurline {
     /// <summary>
     /// Represents a processed sprite. Processed sprite objects are created and bound to each Monocle sprite by the <see cref="SpriteManager" />, which also allows access to them.
-    /// Processed sprites are responsible for integrating the backend sprite animation processing logic with the "frontend" Monocle sprite objects, by handling animation hooks, animation invalidation, async processing, etc.
+    /// Processed sprites are responsible for integrating the backend sprite animation processing logic with the "frontend" <see cref="Sprite" /> / <see cref="CustomSprite" /> objects, by handling animation hooks, animation invalidation, async processing, etc.
     /// </summary>
     public sealed class ProcessedSprite : IDisposable {
         private static readonly FieldInfo Sprite_currentAnimation = typeof(Sprite).GetField("currentAnimation", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -31,7 +31,6 @@ namespace Celeste.Mod.Procedurline {
 
         private CancellationTokenSource cancelSrc;
         private Dictionary<string, Task<Sprite.Animation>> procTasks = new Dictionary<string, Task<Sprite.Animation>>(StringComparer.OrdinalIgnoreCase);
-        private Dictionary<string, IScopedInvalidatable> animInvals = new Dictionary<string, IScopedInvalidatable>(StringComparer.OrdinalIgnoreCase);
 
         internal ProcessedSprite(Sprite sprite, string spriteId, bool ownedByManager) {
             Sprite = sprite;
@@ -61,7 +60,6 @@ namespace Celeste.Mod.Procedurline {
 
                 ResetCache();
                 procTasks = null;
-                animInvals = null;
 
                 //Dispose the scope key
                 ScopeKey?.Dispose();
@@ -96,13 +94,6 @@ namespace Celeste.Mod.Procedurline {
 
                 //Check for already running task
                 if(!procTasks.TryGetValue(animId, out Task<Sprite.Animation> procTask)) {
-                    //If the animation is invalidatable, register handlers
-                    if(origAnim is CustomSpriteAnimation customAnim && origAnim is IScopedInvalidatable invalAnim) {
-                        animInvals.Add(animId, invalAnim);
-                        invalAnim.OnInvalidate += OnAnimInvalidate;
-                        invalAnim.OnInvalidateRegistrars += OnAnimInvalidate;
-                    }
-
                     //Start new processor task
                     if(cancelSrc == null) cancelSrc = new CancellationTokenSource();
                     procTasks.Add(animId, procTask = GetProcessorTask(animId, origAnim, cancelSrc.Token));
@@ -212,25 +203,12 @@ namespace Celeste.Mod.Procedurline {
                 ScopeKey.Reset();
 
                 if(animId == null) {
-                    //Remove the invalidation handlers
-                    foreach(IScopedInvalidatable inval in animInvals.Values) {
-                        inval.OnInvalidate += OnAnimInvalidate;
-                        inval.OnInvalidateRegistrars += OnAnimInvalidate;
-                    }
-                    animInvals.Clear();
-
                     //Cancel all tasks
                     cancelSrc?.Cancel();
                     cancelSrc?.Dispose();
                     cancelSrc = null;
                     procTasks.Clear();
                 } else {
-                    //If there are invalidation handlers, remove them
-                    if(animInvals.Remove(animId, out IScopedInvalidatable inval)) {
-                        inval.OnInvalidate += OnAnimInvalidate;
-                        inval.OnInvalidateRegistrars += OnAnimInvalidate;
-                    }
-
                     //Remove the task
                     procTasks.Remove(animId, out _);
                 }
@@ -240,7 +218,6 @@ namespace Celeste.Mod.Procedurline {
         }
 
         private void OnScopeInvalidate(IScopedInvalidatable key) => ResetCache();
-        private void OnAnimInvalidate(IScopedInvalidatable anim) => ResetCache(((CustomSpriteAnimation) anim).AnimationID);
 
         internal bool DrawDebug(Scene scene, Matrix mat, Dictionary<ProcessedSprite, Rectangle> rects, Dictionary<ProcessedSprite, Rectangle> nrects, bool layoutPass) {
             //Build string to be drawn

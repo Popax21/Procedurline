@@ -7,7 +7,8 @@ using System.Collections.Concurrent;
 
 namespace Celeste.Mod.Procedurline {
     /// <summary>
-    /// Represents something which has validity tie to or related to one or multiple data scopes, and as such can be invalidated. This can be scoped data, scope keys, or entire data scopes themselves.
+    /// Represents something which has validity tied to or related to one or multiple data scopes, and as such can be invalidated. This can be scoped data, scope keys, or entire data scopes themselves.
+    /// <b>You MUST NOT rely on the events provided by this interface to implement the actual invalidation mechanism which use the <see cref="DataScopeKey" /> mechanism. This is bad design, and will only cause problems. This interface is intended to manually override that mechanism and forcefully cause an invalidation, not to replace the properly designed data scope mechanism.</b>
     /// </summary>
     /// <seealso cref="DataScope" />
     /// <seealso cref="DataScopeKey" />
