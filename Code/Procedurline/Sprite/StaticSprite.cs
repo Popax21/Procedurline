@@ -83,9 +83,13 @@ namespace Celeste.Mod.Procedurline {
         }
 
         public override void RegisterScopes(DataScopeKey key) {
+            //Register scopes
             ProcedurlineModule.GlobalScope.RegisterKey(key);
             ProcedurlineModule.StaticScope.RegisterKey(key);
             Processor.RegisterScopes(this, key);
+
+            //Chain to original sprite
+            if(OriginalSprite is CustomSprite csprite) csprite.RegisterScopes(key);
         }
 
         public void Invalidate() {
