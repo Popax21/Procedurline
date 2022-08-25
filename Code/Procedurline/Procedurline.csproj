@@ -4,6 +4,7 @@
         <LangVersion>10.0</LangVersion>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>None</ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>
         <NoWarn>1591;1573</NoWarn>
 
         <CelesteGamePath Condition="'$(CELESTEGAMEPATH)' == ''">..\..\..\..</CelesteGamePath>
