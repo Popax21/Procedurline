@@ -13,15 +13,15 @@ namespace Celeste.Mod.Procedurline {
     /// </summary>
     public abstract class DataCache<T, D> : IScopedInvalidatable, IDisposable where D : class, IDisposable {
         public readonly object LOCK = new object();
-        public readonly IDataScopeRegistrar<T> ScopeRegistrar;
+        public readonly IScopeRegistrar<T> ScopeRegistrar;
 
         private ConcurrentDictionary<DataScopeKey, D> cache = new ConcurrentDictionary<DataScopeKey, D>();
 
         /// <param name="registrar">
-        /// If <c>null</c> is provided, cast <c>this</c> to <see cref="IDataScopeRegistrar{T}" /> to allow child classes to implement it themselves
+        /// If <c>null</c> is provided, cast <c>this</c> to <see cref="IScopeRegistrar{T}" /> to allow child classes to implement it themselves
         /// </param>
-        public DataCache(IDataScopeRegistrar<T> registrar) {
-            ScopeRegistrar = registrar ?? ((IDataScopeRegistrar<T>) this);
+        public DataCache(IScopeRegistrar<T> registrar) {
+            ScopeRegistrar = registrar ?? ((IScopeRegistrar<T>) this);
         }
 
         public void Dispose() {

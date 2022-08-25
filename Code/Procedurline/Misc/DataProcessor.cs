@@ -7,11 +7,11 @@ namespace Celeste.Mod.Procedurline {
     /// <summary>
     /// Represents a data processor.
     /// Data processors process and modify data for a certain target using <see cref="ProcessData"/>.
-    /// They also handle target scope registration by implementing <see cref="IDataScopeRegistrar{T}" />
+    /// They also handle target scope registration by implementing <see cref="IScopeRegistrar{T}" />
     /// </summary>
-    /// <seealso cref="IDataScopeRegistrar{T}" />
+    /// <seealso cref="IScopeRegistrar{T}" />
     /// <seealso cref="CompositeDataProcessor{T, I, D}" />
-    public interface IDataProcessor<T, I, D> : IDataScopeRegistrar<T> {
+    public interface IDataProcessor<T, I, D> : IScopeRegistrar<T> {
         /// <summary>
         /// Processes and modifies data for a specified target. Returns false if it it didn't modify the data.
         /// All data with the same key and ID MUST be processed the same way, or e.g. <see cref="DataProcessorCache{T, I, D}" /> will stop working.
@@ -28,7 +28,7 @@ namespace Celeste.Mod.Procedurline {
     /// Same as <see cref="IDataProcessor{T, I, D}" />, but asynchronous
     /// </summary>
     /// <seealso cref="IDataProcessor{T, I, D}" />>
-    public interface IAsyncDataProcessor<T, I, D> : IDataScopeRegistrar<T> {
+    public interface IAsyncDataProcessor<T, I, D> : IScopeRegistrar<T> {
         /// <summary>
         /// Processes and modifies data for a specified target asynchronously. For more details see <see cref="IDataProcessor{T, I, D}.ProcessData" />.
         /// </summary>
@@ -69,7 +69,7 @@ namespace Celeste.Mod.Procedurline {
     /// <summary>
     /// Implements functionality shared between <seealso cref="CompositeDataProcessor{T, I, D}" /> and <seealso cref="CompositeAsyncDataProcessor{T, I, D}" />
     /// </summary>
-    public abstract class BaseCompositeDataProcessor<C, P, T> : IDataScopeRegistrar<T> where C : BaseCompositeDataProcessor<C, P, T> where P : class, IDataScopeRegistrar<T> {
+    public abstract class BaseCompositeDataProcessor<C, P, T> : IScopeRegistrar<T> where C : BaseCompositeDataProcessor<C, P, T> where P : class, IScopeRegistrar<T> {
         public sealed class ProcessorHandle : IDisposable {
             internal readonly object LOCK = new object();
 
