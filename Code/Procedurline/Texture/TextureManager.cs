@@ -115,7 +115,7 @@ namespace Celeste.Mod.Procedurline {
             token.ThrowIfCancellationRequested();
 
             Texture2D tex = texh.Texture;
-            if(tex != null) {
+            if(MainThreadHelper.IsMainThread && tex != null) {
                 try {
                     data.DownloadData(tex);
                     return Task.FromResult(tex);
@@ -144,15 +144,8 @@ namespace Celeste.Mod.Procedurline {
         public Task<Texture2D> UploadData(TextureHandle texh, TextureData data, CancellationToken token = default) {
             token.ThrowIfCancellationRequested();
 
-            Texture2D tex = texh.Texture;
-            if(tex != null) {
-                try {
-                    data.UploadData(tex);
-                    return Task.FromResult(tex);
-                } catch(Exception e) {
-                    return Task.FromException<Texture2D>(e);
-                }
-            }
+            //Trigger a texture load
+            texh.TriggerTextureLoad();
 
             //Enqueue the action
             TaskCompletionSource<Texture2D> taskSrc = new TaskCompletionSource<Texture2D>();
@@ -162,7 +155,7 @@ namespace Celeste.Mod.Procedurline {
 
                 texture = texh,
                 data = data,
-                action = TextureDataAction.Action.UPLOAD
+                action = TextureDataAction.Action.UPLOAD,
             });
             return taskSrc.Task;
         }

@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Xna.Framework;
@@ -11,6 +12,8 @@ namespace Celeste.Mod.Procedurline {
     /// Provides a managed handle for textures
     /// </summary>
     public sealed class TextureHandle : TextureOwner {
+        private static readonly FieldInfo VirtualTexture__Texture_QueuedLoadLock = typeof(VirtualTexture).GetField("_Texture_QueuedLoadLock", PatchUtils.BindAllInstance);
+
         private VirtualTexture vtex;
         private MTexture mtex;
         private bool ownsTex;
@@ -167,6 +170,28 @@ namespace Celeste.Mod.Procedurline {
             } finally {
                 dataUploadSem.Release();
             }
+        }
+
+        /// <summary>
+        /// Triggers Everest to load the texture.
+        /// </summary>
+        public void TriggerTextureLoad() {
+            if(VirtualTexture__Texture_QueuedLoadLock == null) {
+                //We're in the future! Hopefully Everest's FTL / lazy texture loading code is a bit less messy now...
+                //TODO Correctly deal with the utopia
+                return;
+            }
+
+            MainThreadHelper.Do(() => {
+                //Check if the texture has already loaded
+                if((!Texture?.IsDisposed) ?? false) return;
+
+                //Check if a load has already been triggered
+                if(VirtualTexture__Texture_QueuedLoadLock.GetValue(VirtualTexture) != null) return;
+
+                //Reload the texture to trigger a load, don't set _Texture_Requesting to do so asynchronously
+                VirtualTexture.Reload();
+            });
         }
 
         /// <summary>
