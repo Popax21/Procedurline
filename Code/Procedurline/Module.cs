@@ -27,7 +27,7 @@ namespace Celeste.Mod.Procedurline {
 
         private DataScope globalScope, sceneScope, levelScope, staticScope, playerScope;
 
-        private List<IDetour> contentHooks = new List<IDetour>();
+        private DisposablePool contentDispPool;
 
         public override void Load() {
             //Create components
@@ -44,47 +44,47 @@ namespace Celeste.Mod.Procedurline {
             playerScope = new DataScope("$PLAYER");
 
             //Apply content hooks and patches
+            contentDispPool = new DisposablePool();
             foreach(Type type in typeof(ProcedurlineModule).Assembly.GetTypes()) {
                 foreach(MethodInfo method in type.GetMethods(PatchUtils.BindAllStatic | BindingFlags.DeclaredOnly)) {
                     if(method.GetCustomAttribute(typeof(ContentInitAttribute)) is ContentInitAttribute) method.Invoke(null, Array.Empty<object>());
 
                     if(method.GetCustomAttribute(typeof(ContentHookAttribute)) is ContentHookAttribute hookAttr) {
                         Type targetType = (hookAttr.TargetTypeName != null) ? Assembly.GetEntryAssembly().GetType(hookAttr.TargetTypeName, true, true) : type.BaseType;
-                        contentHooks.Add(new Hook(targetType.GetMethodRecursive(hookAttr.TargetMethodName, PatchUtils.BindAll), method));
+                        contentDispPool.Add(new Hook(targetType.GetMethodRecursive(hookAttr.TargetMethodName, PatchUtils.BindAll), method));
                     }
 
                     if(method.GetCustomAttribute(typeof(ContentILHookAttribute)) is ContentILHookAttribute ilHookAttr) {
                         Type targetType = (ilHookAttr.TargetTypeName != null) ? Assembly.GetEntryAssembly().GetType(ilHookAttr.TargetTypeName, true, true) : type.BaseType;
                         MethodInfo targetMethod = targetType.GetMethodRecursive(ilHookAttr.TargetMethodName, PatchUtils.BindAll);
                         if(ilHookAttr.HookStateMachine) targetMethod = targetMethod.GetStateMachineTarget();
-                        contentHooks.Add(new ILHook(targetMethod, (ILContext.Manipulator) method.CreateDelegate(typeof(ILContext.Manipulator))));
+                        contentDispPool.Add(new ILHook(targetMethod, (ILContext.Manipulator) method.CreateDelegate(typeof(ILContext.Manipulator))));
                     }
                 }
 
                 foreach(MethodInfo method in type.GetMethods(PatchUtils.BindAllInstance | BindingFlags.DeclaredOnly)) {
                     if(method.GetCustomAttribute(typeof(ContentVirtualizeAttribute)) is ContentVirtualizeAttribute virtAttr) {
-                        method.Virtualize(virtAttr.CallBase, contentHooks);
+                        method.Virtualize(virtAttr.CallBase, contentDispPool);
                     }
                 }
 
                 foreach(PropertyInfo prop in type.GetProperties(PatchUtils.BindAll | BindingFlags.DeclaredOnly)) {
                     if(prop.GetCustomAttribute(typeof(ContentFieldProxyAttribute)) is ContentFieldProxyAttribute proxyAttr) {
-                        prop.PatchFieldProxy(type.GetFieldRecursive(proxyAttr.TargetFieldName, PatchUtils.BindAll), contentHooks);
+                        prop.PatchFieldProxy(type.GetFieldRecursive(proxyAttr.TargetFieldName, PatchUtils.BindAll), contentDispPool);
                     }
                 }
 
                 foreach(PropertyInfo prop in type.GetProperties(PatchUtils.BindAllInstance | BindingFlags.DeclaredOnly)) {
                     foreach(ContentPatchSFXAttribute sfxAttr in prop.GetCustomAttributes(typeof(ContentPatchSFXAttribute)).Cast<ContentPatchSFXAttribute>()) {
-                        type.BaseType.GetMethodRecursive(sfxAttr.TargetMethodName, PatchUtils.BindAllInstance).PatchSFX(prop, contentHooks);
+                        type.BaseType.GetMethodRecursive(sfxAttr.TargetMethodName, PatchUtils.BindAllInstance).PatchSFX(prop, contentDispPool);
                     }
                 }
             }
         }
 
         public override void Unload() {
-            //Dispose content hooks
-            foreach(IDetour hook in contentHooks) hook.Dispose();
-            contentHooks.Clear();
+            //Dispose content disposables
+            contentDispPool?.Dispose();
 
             //Call content uninitializers
             foreach(Type type in typeof(ProcedurlineModule).Assembly.GetTypes()) {

@@ -51,24 +51,24 @@ namespace Celeste.Mod.Procedurline {
         /// The method must be hiding a non-virtual method in the base class and have an empty/NOP body, if the base method should still be invoked.
         /// After being patched, child classes overriding the class can call the original method by calling the base method, and their virtual method is called instead of the hidden method.
         /// </summary>
-        public static void Virtualize(this MethodInfo method, bool callBase, IList<IDetour> hooks) {
+        public static void Virtualize(this MethodInfo method, bool callBase, DisposablePool dpool) {
             if(method.IsStatic) throw new ArgumentException($"Can't virtualize static method {method.GetFullName()}!");
             Type[] parameters = method.GetParameters().Select(p => p.ParameterType).ToArray();
             MethodInfo baseMethod = method.DeclaringType.BaseType.GetMethodRecursive(method.Name, BindAllInstance, parameters);
-            hooks.Add(new MethodVirtualizerDetour(baseMethod, method, callBase));
+            dpool.Add(new MethodVirtualizerDetour(baseMethod, method, callBase));
         }
 
         /// <summary>
         /// Patches the property to bea field proxy. After patching, the property will proxy the given (private) field.
         /// </summary>
-        public static void PatchFieldProxy(this PropertyInfo prop, FieldInfo field, IList<IDetour> hooks) {
+        public static void PatchFieldProxy(this PropertyInfo prop, FieldInfo field, DisposablePool dpool) {
             //Check field for compatibility
             if(prop.GetAccessors(true).Any(a => a.IsStatic != field.IsStatic) || prop.PropertyType.IsAssignableFrom(field.FieldType)) new ArgumentException($"Mismatching field {field.GetFullName()} and property {prop.GetFullName()} types!");
             if(!field.DeclaringType.IsAssignableFrom(prop.DeclaringType)) throw new ArgumentException($"Property {prop.GetFullName()} in different type than field!");
 
             //Hook getter
             if(prop.GetGetMethod(true) is MethodInfo getter) {
-                hooks.Add(new ILHook(getter, ctx => {
+                dpool.Add(new ILHook(getter, ctx => {
                     //Rip out the entire method body
                     ctx.Body.Instructions.Clear();
 
@@ -87,7 +87,7 @@ namespace Celeste.Mod.Procedurline {
 
             //Hook setter
             if(prop.GetSetMethod(true) is MethodInfo setter) {
-                hooks.Add(new ILHook(setter, ctx => {
+                dpool.Add(new ILHook(setter, ctx => {
                     //Rip out the entire method body
                     ctx.Body.Instructions.Clear();
 
@@ -113,14 +113,14 @@ namespace Celeste.Mod.Procedurline {
         /// <summary>
         /// Patches a SFX in a vanilla method, by replacing it with one given by a property at runtime. The property can be virtual, but the base implementation must return the SFX to be replaced.
         /// </summary>
-        public static void PatchSFX(this MethodInfo method, PropertyInfo sfxProp, IList<IDetour> hooks) {
+        public static void PatchSFX(this MethodInfo method, PropertyInfo sfxProp, DisposablePool dpool) {
             //Check property for compatibility
             MethodInfo sfxPropGetter = sfxProp.GetGetMethod(true);
             if(sfxPropGetter == null || sfxPropGetter.IsStatic || sfxProp.PropertyType != typeof(string)) throw new ArgumentException($"Incompatible SFX property {sfxProp.GetFullName()}!");
             if(!method.DeclaringType.IsAssignableFrom(sfxProp.DeclaringType)) throw new ArgumentException($"SFX property {sfxProp.GetFullName()} in different type than method!");
 
             //Hook calls to Audio.Play/Loop
-            hooks.Add(new ILHook(method, ctx => {
+            dpool.Add(new ILHook(method, ctx => {
                 MethodInfo stringComp = typeof(string).GetMethod(nameof(string.Equals), new Type[] { typeof(string) });
 
                 Dictionary<string, VariableDefinition> argLocals = new Dictionary<string, VariableDefinition>(StringComparer.OrdinalIgnoreCase);
