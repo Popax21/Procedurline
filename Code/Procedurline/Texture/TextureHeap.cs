@@ -19,7 +19,7 @@ namespace Celeste.Mod.Procedurline {
             
             public Node Allocate(TextureData tex) {
                 //If the node contains data or is too small, we can't allocate from it
-                if(data != null || rect.Width < tex.Width || rect.Height < tex.Height) return null;
+                if(data != null || rect.Width < tex.Width+1 || rect.Height < tex.Height+1) return null;
                 
                 if(children != null) {
                     //Try to allocate from child nodes
@@ -35,7 +35,7 @@ namespace Celeste.Mod.Procedurline {
 
                 //Could this texture fit inside of a child?
                 int childWidth = (rect.Width-1) / 2, childHeight = (rect.Height-1) / 2;
-                if(tex.Width <= childWidth && tex.Height <= childHeight) {
+                if(tex.Width+1 <= childWidth && tex.Height+1 <= childHeight) {
                     //Create children & allocate in first
                     children = new Node[2,2];
                     for(int cx = 0; cx <= 1; cx++) {
