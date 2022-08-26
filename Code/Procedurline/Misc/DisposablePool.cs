@@ -18,7 +18,7 @@ namespace Celeste.Mod.Procedurline {
 
                 List<IDisposable> disps = disposables;
                 disposables = null;
-                foreach(IDisposable d in disps) d.Dispose();
+                for(int i = disps.Count-1; i >= 0; i--) disps[i].Dispose();
             }
         }
 
