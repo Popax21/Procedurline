@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Linq;
 using System.Reflection;
-using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 
 using MonoMod.Cil;
@@ -20,72 +19,71 @@ namespace Celeste.Mod.Procedurline {
         public override Type SettingsType => typeof(ProcedurlineSettings);
         public static ProcedurlineSettings Settings => (ProcedurlineSettings) Instance?._Settings;
 
+        private DisposablePool dispPool;
+
         private GlobalManager globalManager;
         private TextureManager texManager;
         private SpriteManager spriteManager;
         private PlayerManager playerManager;
 
-        private DataScope globalScope, sceneScope, levelScope, staticScope, playerScope;
-
-        private DisposablePool contentDispPool;
+        private DataScope globalScope, sceneScope, levelScope, spriteScope, staticScope, playerScope;
 
         public override void Load() {
+            dispPool = new DisposablePool();
+
             //Create components
-            globalManager = new GlobalManager(Celeste.Instance);
-            texManager = new TextureManager(Celeste.Instance);
-            spriteManager = new SpriteManager(Celeste.Instance);
-            playerManager = new PlayerManager(Celeste.Instance);
+            globalManager = dispPool.Add(new GlobalManager(Celeste.Instance));
+            texManager = dispPool.Add(new TextureManager(Celeste.Instance));
+            spriteManager = dispPool.Add(new SpriteManager(Celeste.Instance));
+            playerManager = dispPool.Add(new PlayerManager(Celeste.Instance));
 
             //Create default scopes
-            globalScope = new DataScope("$GLOBAL");
-            sceneScope = new DataScope("$SCENE");
-            levelScope = new DataScope("$LEVEL");
-            staticScope = new DataScope("$STATIC");
-            playerScope = new DataScope("$PLAYER");
+            globalScope = dispPool.Add(new DataScope("$GLOBAL"));
+            sceneScope = dispPool.Add(new DataScope("$SCENE"));
+            levelScope = dispPool.Add(new DataScope("$LEVEL"));
+            spriteScope = dispPool.Add(new DataScope("$SPRITE"));
+            staticScope = dispPool.Add(new DataScope("$STATIC"));
+            playerScope = dispPool.Add(new DataScope("$PLAYER"));
 
             //Apply content hooks and patches
-            contentDispPool = new DisposablePool();
             foreach(Type type in typeof(ProcedurlineModule).Assembly.GetTypes()) {
                 foreach(MethodInfo method in type.GetMethods(PatchUtils.BindAllStatic | BindingFlags.DeclaredOnly)) {
                     if(method.GetCustomAttribute(typeof(ContentInitAttribute)) is ContentInitAttribute) method.Invoke(null, Array.Empty<object>());
 
                     if(method.GetCustomAttribute(typeof(ContentHookAttribute)) is ContentHookAttribute hookAttr) {
                         Type targetType = (hookAttr.TargetTypeName != null) ? Assembly.GetEntryAssembly().GetType(hookAttr.TargetTypeName, true, true) : type.BaseType;
-                        contentDispPool.Add(new Hook(targetType.GetMethodRecursive(hookAttr.TargetMethodName, PatchUtils.BindAll), method));
+                        dispPool.Add(new Hook(targetType.GetMethodRecursive(hookAttr.TargetMethodName, PatchUtils.BindAll), method));
                     }
 
                     if(method.GetCustomAttribute(typeof(ContentILHookAttribute)) is ContentILHookAttribute ilHookAttr) {
                         Type targetType = (ilHookAttr.TargetTypeName != null) ? Assembly.GetEntryAssembly().GetType(ilHookAttr.TargetTypeName, true, true) : type.BaseType;
                         MethodInfo targetMethod = targetType.GetMethodRecursive(ilHookAttr.TargetMethodName, PatchUtils.BindAll);
                         if(ilHookAttr.HookStateMachine) targetMethod = targetMethod.GetStateMachineTarget();
-                        contentDispPool.Add(new ILHook(targetMethod, (ILContext.Manipulator) method.CreateDelegate(typeof(ILContext.Manipulator))));
+                        dispPool.Add(new ILHook(targetMethod, (ILContext.Manipulator) method.CreateDelegate(typeof(ILContext.Manipulator))));
                     }
                 }
 
                 foreach(MethodInfo method in type.GetMethods(PatchUtils.BindAllInstance | BindingFlags.DeclaredOnly)) {
                     if(method.GetCustomAttribute(typeof(ContentVirtualizeAttribute)) is ContentVirtualizeAttribute virtAttr) {
-                        method.Virtualize(virtAttr.CallBase, contentDispPool);
+                        method.Virtualize(virtAttr.CallBase, dispPool);
                     }
                 }
 
                 foreach(PropertyInfo prop in type.GetProperties(PatchUtils.BindAll | BindingFlags.DeclaredOnly)) {
                     if(prop.GetCustomAttribute(typeof(ContentFieldProxyAttribute)) is ContentFieldProxyAttribute proxyAttr) {
-                        prop.PatchFieldProxy(type.GetFieldRecursive(proxyAttr.TargetFieldName, PatchUtils.BindAll), contentDispPool);
+                        prop.PatchFieldProxy(type.GetFieldRecursive(proxyAttr.TargetFieldName, PatchUtils.BindAll), dispPool);
                     }
                 }
 
                 foreach(PropertyInfo prop in type.GetProperties(PatchUtils.BindAllInstance | BindingFlags.DeclaredOnly)) {
                     foreach(ContentPatchSFXAttribute sfxAttr in prop.GetCustomAttributes(typeof(ContentPatchSFXAttribute)).Cast<ContentPatchSFXAttribute>()) {
-                        type.BaseType.GetMethodRecursive(sfxAttr.TargetMethodName, PatchUtils.BindAllInstance).PatchSFX(prop, contentDispPool);
+                        type.BaseType.GetMethodRecursive(sfxAttr.TargetMethodName, PatchUtils.BindAllInstance).PatchSFX(prop, dispPool);
                     }
                 }
             }
         }
 
         public override void Unload() {
-            //Dispose content disposables
-            contentDispPool?.Dispose();
-
             //Call content uninitializers
             foreach(Type type in typeof(ProcedurlineModule).Assembly.GetTypes()) {
                 foreach(MethodInfo method in type.GetMethods(PatchUtils.BindAllStatic)) {
@@ -93,17 +91,8 @@ namespace Celeste.Mod.Procedurline {
                 }
             }
 
-            //Dispose default scopes
-            globalScope?.Dispose();
-            sceneScope?.Dispose();
-            levelScope?.Dispose();
-            playerScope?.Dispose();
-
-            //Dispose components
-            playerManager?.Dispose();
-            spriteManager?.Dispose();
-            texManager?.Dispose();
-            globalManager?.Dispose();
+            //Dispose disposables
+            dispPool?.Dispose();
         }
 
         public override void LoadContent(bool firstLoad) {
@@ -129,6 +118,7 @@ namespace Celeste.Mod.Procedurline {
         public static DataScope GlobalScope => Instance?.globalScope;
         public static DataScope SceneScope => Instance?.sceneScope;
         public static DataScope LevelScope => Instance?.levelScope;
+        public static DataScope SpriteScope => Instance?.spriteScope;
         public static DataScope StaticScope => Instance?.staticScope;
         public static DataScope PlayerScope => Instance?.playerScope;
 
@@ -138,6 +128,7 @@ namespace Celeste.Mod.Procedurline {
                 case "$GLOBAL": GlobalScope?.Invalidate(); break;
                 case "$SCENE": SceneScope?.Invalidate(); break;
                 case "$LEVEL": LevelScope?.Invalidate(); break;
+                case "$SPRITE": SpriteScope?.Invalidate(); break;
                 case "$STATIC": StaticScope?.Invalidate(); break;
                 case "$PLAYER": PlayerScope?.Invalidate(); break;
                 default: Celeste.Commands.Log("Unknown scope!"); break;
