@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using System.Diagnostics;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -32,6 +33,7 @@ namespace Celeste.Mod.Procedurline {
 
         private int width, height;
         private Color* data;
+        private StackTrace allocTrace;
 
         public TextureData(int width, int height) {
             this.width = width;
@@ -39,15 +41,27 @@ namespace Celeste.Mod.Procedurline {
 
             //Allocate data
             data = (Color*) Marshal.AllocHGlobal(width * height * 4);
+            GC.AddMemoryPressure(width * height * 4);
+
+            //Create a stack trace if leak debugging is enabled
+            if(ProcedurlineModule.Settings?.DebugTextureLeaks ?? false) allocTrace = new StackTrace();
         }
 
-        ~TextureData() => Dispose();
+        ~TextureData() {
+            if(data != null) {
+                Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Detected leaked texture data {width}x{height} [{width*height*4} bytes]");
+                if(allocTrace != null) Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, allocTrace.ToString());
+                Dispose();
+            }
+        }
 
         public void Dispose() {
             //Free data
             if(data != null) {
+                GC.RemoveMemoryPressure(width * height * 4);
                 Marshal.FreeHGlobal((IntPtr) data);
                 data = null;
+                allocTrace = null;
             }
         }
 

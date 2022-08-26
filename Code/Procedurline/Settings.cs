@@ -7,6 +7,9 @@ namespace Celeste.Mod.Procedurline {
         public bool UseThreadPool { get; set; } = true;
         public bool LogProcessingTimes { get; set; } = false;
 
+        [SettingIgnore]
+        public bool DebugTextureLeaks { get; set; } = false;
+
         [YamlIgnore]
         public int ResetCache { get; set; }
         public void CreateResetCacheEntry(TextMenu menu, bool inGame) {
