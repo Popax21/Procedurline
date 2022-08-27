@@ -156,11 +156,8 @@ namespace Celeste.Mod.Procedurline {
         public long CurrentMemoryUsage => curProc.WorkingSet64;
         public long MaxMemoryUsage {
             get {
-                long maxMemUsage = long.MaxValue;
-                
-                //We can do better on Windows
-                if(PlatformHelper.Is(MonoMod.Utils.Platform.Windows)) maxMemUsage = (long) curProc.MaxWorkingSet;
-    
+                long maxMemUsage = (long) (Everest.SystemMemoryMB*1024*1024);
+
                 //32 bit processes limit our memory
                 if(!Environment.Is64BitProcess) {
                     //On Windows, we're limited to the 4GB instead of 2GB on 64 bit machines
