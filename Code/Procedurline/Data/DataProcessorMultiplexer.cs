@@ -21,6 +21,7 @@ namespace Celeste.Mod.Procedurline {
 
         protected BaseDataProcessorMultiplexer(string name, int count) : this(name, new P[count]) {}
         protected BaseDataProcessorMultiplexer(string name, params P[] processors) {
+            if(processors.Length <= 0) throw new ArgumentException("Can't create a BaseDataProcessorMultiplexer with an empty processor array!");
             this.processors = processors;
 
             //Create data scopes
