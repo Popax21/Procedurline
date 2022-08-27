@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 
+using Monocle;
+
 namespace Celeste.Mod.Procedurline {
     /// <summary>
     /// Holds a collection of <see cref="IDisposable" />s, which can then be all disposed at once. Usefull for keeping track of a dynamic collection of resources.
@@ -56,6 +58,39 @@ namespace Celeste.Mod.Procedurline {
 
             disp.Dispose();
             return default;
+        }
+    }
+
+    /// <summary>
+    /// A Monocle component which holds an <see cref="DisposablePool" />
+    /// </summary>
+    public sealed class DisposablePoolComponent : Component {
+        /// <summary>
+        /// Creates an <see cref="DisposablePoolComponent" />, adds it to a given entity, and returns the disposable pool
+        /// </summary>
+        public static DisposablePool AddTo(Entity entity) {
+            DisposablePoolComponent comp = new DisposablePoolComponent();
+            entity.Add(comp);
+            return comp.Pool;
+        }
+
+        public readonly DisposablePool Pool = new DisposablePool();
+
+        public DisposablePoolComponent() : base(false, false) {}
+
+        public override void Removed(Entity entity) {
+            base.Removed(entity);
+            Pool.Dispose();
+        }
+
+        public override void EntityRemoved(Scene scene) {
+            base.EntityRemoved(scene);
+            Pool.Dispose();
+        }
+
+        public override void SceneEnd(Scene scene) {
+            base.SceneEnd(scene);
+            Pool.Dispose();
         }
     }
 }
