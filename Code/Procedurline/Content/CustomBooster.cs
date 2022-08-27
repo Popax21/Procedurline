@@ -19,29 +19,25 @@ namespace Celeste.Mod.Procedurline {
         private static readonly Dictionary<Color, Sprite> SPRITE_CACHE = new Dictionary<Color, Sprite>();
 
         private static readonly FieldInfo Booster_sprite = typeof(Booster).GetField("sprite", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static readonly FieldInfo Booster_particleType = typeof(Booster).GetField("particleType", BindingFlags.NonPublic | BindingFlags.Instance);
 
         public readonly bool IsRed;
-        public readonly Color Color;
-        public readonly Sprite Sprite;
-        public readonly ParticleType AppearParticleType;
-        public readonly ParticleType BurstParticleType;
+
+        public Sprite Sprite { get; private set; }
+        private readonly Color spriteColor;
 
         public CustomBooster(Vector2 pos, Color color, bool isRed) : base(pos, isRed) {
+            spriteColor = color;
             IsRed = isRed;
-            Color = color;
+        }
 
-            Matrix colMat = ColorUtils.CalculateRecolorMatrix(isRed ? RedColor : GreenColor, color);
-
+        public override void Added(Scene scene) {
             //Process sprite
             Sprite sprite = Components.Get<Sprite>();
             Remove(sprite);
             Add(Sprite = ProcessSprite(sprite));
             Booster_sprite.SetValue(this, Sprite);
 
-            //Recolor particles
-            AppearParticleType = P_RedAppear.ApplyMatrix(colMat);
-            Booster_particleType.SetValue(this, BurstParticleType = P_BurstRed.ApplyMatrix(colMat, 0.05f, 0.05f));
+            base.Added(scene);
         }
 
         /// <summary>
@@ -49,11 +45,22 @@ namespace Celeste.Mod.Procedurline {
         /// The default implementation caches sprites based on color, custom implementations should implement a cache themselves
         /// </summary>
         protected virtual Sprite ProcessSprite(Sprite origSprite) {
-            if(!SPRITE_CACHE.TryGetValue(Color, out Sprite recSprite)) {
-                Matrix colMat = ColorUtils.CalculateRecolorMatrix(RedColor, Color);
-                SPRITE_CACHE[Color] = recSprite = new DerivedSprite($"customBooster-#{Color.PackedValue:x8}", origSprite, new SpriteColorMatrixProcessor(colMat, 0.05f, 0.05f).WrapAsync<Sprite, string, SpriteAnimationData>());
+            if(!SPRITE_CACHE.TryGetValue(spriteColor, out Sprite recSprite)) {
+                Matrix colMat = ColorUtils.CalculateRecolorMatrix(RedColor, spriteColor);
+                SPRITE_CACHE[spriteColor] = recSprite = new DerivedSprite($"customBooster-#{spriteColor.PackedValue:x8}", origSprite, new SpriteColorMatrixProcessor(colMat, 0.05f, 0.05f).WrapAsync<Sprite, string, SpriteAnimationData>());
             }
             return recSprite.Clone();
+        }
+
+        /// <summary>
+        /// Recolors the graphical effects (not the sprite!) of the booster
+        /// </summary>
+        protected virtual void RecolorGFX(Color col) {
+            Matrix colMat = ColorUtils.CalculateRecolorMatrix(IsRed ? RedColor : GreenColor, col);
+
+            //Recolor particles
+            AppearParticleType = Booster.P_Appear.ApplyMatrix(colMat);
+            BurstParticleType = P_BurstRed.ApplyMatrix(colMat, 0.05f, 0.05f);
         }
 
         /// <summary>
@@ -110,6 +117,9 @@ namespace Celeste.Mod.Procedurline {
         [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual new void PlayerBoosted(Player player, Vector2 dir) {}
         [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual new void PlayerReleased() {}
         [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual new void PlayerDied() {}
+
+        protected ParticleType AppearParticleType { get; private set; }
+        [ContentFieldProxy("particleType")] protected ParticleType BurstParticleType { [MethodImpl(MethodImplOptions.NoInlining)] get; [MethodImpl(MethodImplOptions.NoInlining)] set; }
 
         [ContentPatchSFX("Appear")] [ContentPatchSFX("Respawn")] protected virtual string AppearSFX => IsRed ? "event:/game/05_mirror_temple/redbooster_reappear" : "event:/game/04_cliffside/greenbooster_reappear";
         protected virtual string EnterSFX => IsRed ? "event:/game/05_mirror_temple/redbooster_enter" : "event:/game/04_cliffside/greenbooster_enter";

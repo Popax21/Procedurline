@@ -16,33 +16,27 @@ namespace Celeste.Mod.Procedurline {
         private static readonly Dictionary<Tuple<Color, bool>, Sprite> SPRITE_CACHE = new Dictionary<Tuple<Color, bool>, Sprite>();
 
         private static readonly FieldInfo Refill_sprite = typeof(Refill).GetField("sprite", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static readonly FieldInfo Refill_p_shatter = typeof(Refill).GetField("p_shatter", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static readonly FieldInfo Refill_p_regen = typeof(Refill).GetField("p_regen", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static readonly FieldInfo Refill_p_glow = typeof(Refill).GetField("p_glow", BindingFlags.NonPublic | BindingFlags.Instance);
 
-        public readonly Color Color;
         public readonly bool DoubleRefill, OneUse;
-        public readonly ParticleType ShatterParticleType;
-        public readonly ParticleType RegenerationParticleType;
-        public readonly ParticleType GlowParticleType;
+
+        public Sprite Sprite { get; private set; }
+        private readonly Color spriteColor;
 
         public CustomRefill(Vector2 position, Color color, bool doubleRefill, bool oneUse) : base(position, doubleRefill, oneUse) {
-            Color = color;
+            spriteColor = color;
             DoubleRefill = doubleRefill;
             OneUse = oneUse;
+            RecolorGFX(color);
+        }
 
-            Matrix colMat = ColorUtils.CalculateRecolorMatrix(doubleRefill ? DoubleColor : OnceColor, color);
-
+        public override void Added(Scene scene) {
             //Process sprite
             Sprite sprite = Components.Get<Sprite>();
             Remove(sprite);
-            Add(sprite = ProcessSprite(sprite));
-            Refill_sprite.SetValue(this, sprite);
+            Add(Sprite = ProcessSprite(sprite));
+            Refill_sprite.SetValue(this, Sprite);
 
-            //Recolor particels
-            Refill_p_shatter.SetValue(this, ShatterParticleType = ((ParticleType) Refill_p_shatter.GetValue(this)).ApplyMatrix(colMat, 0.05f, 0.05f));
-            Refill_p_regen.SetValue(this, RegenerationParticleType = ((ParticleType) Refill_p_regen.GetValue(this)).ApplyMatrix(colMat, 0.05f, 0.05f));
-            Refill_p_glow.SetValue(this, GlowParticleType = ((ParticleType) Refill_p_glow.GetValue(this)).ApplyMatrix(colMat, 0.05f, 0.05f));
+            base.Added(scene);
         }
 
         /// <summary>
@@ -50,15 +44,27 @@ namespace Celeste.Mod.Procedurline {
         /// The default implementation caches sprites based on color and refill type, custom implementations should implement a cache themselves
         /// </summary>
         protected virtual Sprite ProcessSprite(Sprite origSprite) {
-            if(!SPRITE_CACHE.TryGetValue(new Tuple<Color, bool>(Color, DoubleRefill), out Sprite recSprite)) {
-                Matrix colMat = ColorUtils.CalculateRecolorMatrix(DoubleRefill ? DoubleColor : OnceColor, Color);
-                SPRITE_CACHE[new Tuple<Color, bool>(Color, DoubleRefill)] = recSprite = new DerivedSprite($"custom{(DoubleRefill ? "Double" : string.Empty)}Refill-#{Color.PackedValue:x8}", origSprite, new SpriteColorMatrixProcessor(colMat, 0.05f, 0.05f).WrapAsync<Sprite, string, SpriteAnimationData>());
+            if(!SPRITE_CACHE.TryGetValue(new Tuple<Color, bool>(spriteColor, DoubleRefill), out Sprite recSprite)) {
+                Matrix colMat = ColorUtils.CalculateRecolorMatrix(DoubleRefill ? DoubleColor : OnceColor, spriteColor);
+                SPRITE_CACHE[new Tuple<Color, bool>(spriteColor, DoubleRefill)] = recSprite = new DerivedSprite($"custom{(DoubleRefill ? "Double" : string.Empty)}Refill-#{spriteColor.PackedValue:x8}", origSprite, new SpriteColorMatrixProcessor(colMat, 0.05f, 0.05f).WrapAsync<Sprite, string, SpriteAnimationData>());
             }
             return recSprite.Clone();
         }
 
         /// <summary>
-        /// Breaks the refill.
+        /// Recolors the graphical effects (not the sprite!) of the refill
+        /// </summary>
+        protected virtual void RecolorGFX(Color col) {
+            Matrix colMat = ColorUtils.CalculateRecolorMatrix(DoubleRefill ? DoubleColor : OnceColor, col);
+
+            //Recolor particles
+            ShatterParticleType = (DoubleRefill ? Refill.P_ShatterTwo : Refill.P_Shatter).ApplyMatrix(colMat, 0.05f, 0.05f);
+            RegenerationParticleType = (DoubleRefill ? Refill.P_RegenTwo : Refill.P_Regen).ApplyMatrix(colMat, 0.05f, 0.05f);
+            GlowParticleType = (DoubleRefill ? Refill.P_GlowTwo : Refill.P_Glow).ApplyMatrix(colMat, 0.05f, 0.05f);
+        }
+
+        /// <summary>
+        /// Breaks the refill
         /// </summary>
         protected virtual void Break(Player player, float? respawnDelay = VanillaRespawnDelay) {
             Audio.Play(CollectSFX, Position);
@@ -71,7 +77,7 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
-        /// Called when the player touches your refill.
+        /// Called when the player touches your refill
         /// </summary>
         /// <returns>
         /// <c>true</c> if the default break behaviour should occur, or <c>false</c> otherwise.
@@ -85,6 +91,10 @@ namespace Celeste.Mod.Procedurline {
         }
         [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual void Respawn() {}
         [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual IEnumerator RefillRoutine(Player player) => default;
+
+        [ContentFieldProxy("p_shatter")] protected ParticleType ShatterParticleType { [MethodImpl(MethodImplOptions.NoInlining)] get; [MethodImpl(MethodImplOptions.NoInlining)] set; }
+        [ContentFieldProxy("p_regen")] protected ParticleType RegenerationParticleType { [MethodImpl(MethodImplOptions.NoInlining)] get; [MethodImpl(MethodImplOptions.NoInlining)] set; }
+        [ContentFieldProxy("p_glow")] protected ParticleType GlowParticleType { [MethodImpl(MethodImplOptions.NoInlining)] get; [MethodImpl(MethodImplOptions.NoInlining)] set; }
 
         protected virtual string CollectSFX => DoubleRefill ? "event:/new_content/game/10_farewell/pinkdiamond_touch" : "event:/game/general/diamond_touch";
         [ContentPatchSFX("Respawn")] protected virtual string RespawnSFX => DoubleRefill ? "event:/new_content/game/10_farewell/pinkdiamond_return" : "event:/game/general/diamond_return";
