@@ -167,7 +167,7 @@ namespace Celeste.Mod.Procedurline {
                 if(cachePinCount++ <= 0) {
                     //Force-cache the texture
                     if(!ProcedurlineModule.TextureManager.CacheEvictor.CacheTexture(this, true)) Celeste.CriticalFailureHandler(new InvalidOperationException("Couldn't force-cache texture!"));
-                    dataCache = new TextureData(Width, Height);
+                    dataCache ??= new TextureData(Width, Height);
                 }
             }
         }
