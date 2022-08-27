@@ -76,7 +76,7 @@ namespace Celeste.Mod.Procedurline {
                         action.taskSrc.SetException(new ObjectDisposedException("TextureHandle"));
                     } else {
                         Texture2D tex = action.texture.Texture;
-                        if(tex == null) continue;
+                        if(tex == null || action.texture.IsLoading) continue;
 
                         //Execute the pending action
                         try {
@@ -124,15 +124,8 @@ namespace Celeste.Mod.Procedurline {
         public Task<Texture2D> DownloadData(TextureHandle texh, TextureData data, CancellationToken token = default) {
             token.ThrowIfCancellationRequested();
 
-            Texture2D tex = texh.Texture;
-            if(MainThreadHelper.IsMainThread && tex != null) {
-                try {
-                    data.DownloadData(tex);
-                    return Task.FromResult(tex);
-                } catch(Exception e) {
-                    return Task.FromException<Texture2D>(e);
-                }
-            }
+            //Trigger a texture load
+            texh.TriggerTextureLoad();
 
             //Enqueue the action
             TaskCompletionSource<Texture2D> taskSrc = new TaskCompletionSource<Texture2D>();
@@ -154,8 +147,8 @@ namespace Celeste.Mod.Procedurline {
         public Task<Texture2D> UploadData(TextureHandle texh, TextureData data, CancellationToken token = default) {
             token.ThrowIfCancellationRequested();
 
-            //Trigger a texture load
-            texh.TriggerTextureLoad();
+            //Short circuit texture loading if possible
+            texh.ShortCircuitTextureLoad();
 
             //Enqueue the action
             TaskCompletionSource<Texture2D> taskSrc = new TaskCompletionSource<Texture2D>();

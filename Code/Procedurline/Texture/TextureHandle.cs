@@ -45,6 +45,8 @@ namespace Celeste.Mod.Procedurline {
             public TextureData CloneDataAndDispose() {
                 lock(Texture.LOCK) {
                     if(!Alive) throw new ObjectDisposedException("TextureHandle.CachePinHandle");
+                    if(!Texture.dataCacheValid) throw new InvalidOperationException("Cached texture data has been manually invalidated!");
+
                     TextureData texData = Texture.CachedData.Clone();
                     Dispose();
                     return texData;
@@ -57,6 +59,8 @@ namespace Celeste.Mod.Procedurline {
             public void CopyDataAndDispose(TextureData dst, Rectangle? srcRect = null, Rectangle? dstRect = null) {
                 lock(Texture.LOCK) {
                     if(!Alive) throw new ObjectDisposedException("TextureHandle.CachePinHandle");
+                    if(!Texture.dataCacheValid) throw new InvalidOperationException("Cached texture data has been manually invalidated!");
+
                     Texture.CachedData.Copy(dst, srcRect, dstRect);
                     Dispose();
                 }
@@ -75,7 +79,9 @@ namespace Celeste.Mod.Procedurline {
         internal LinkedListNode<TextureHandle> cacheNode;
         private int cachePinCount;
         private LinkedList<CachePinHandle> cachePinHandles = new LinkedList<CachePinHandle>();
-        internal TextureData dataCache;
+
+        private bool dataCacheValid = false;
+        private TextureData dataCache;
 
         private SemaphoreSlim dataUploadSem;
         private CancellationTokenSource dataCancelSrc;
@@ -187,12 +193,15 @@ namespace Celeste.Mod.Procedurline {
             lock(LOCK) {
                 if(IsDisposed) throw new ObjectDisposedException("TextureHandle");
 
-                //Force-dispose all cache pin Handles
+                //Force-dispose all cache pin handles
                 foreach(CachePinHandle pinHandle in cachePinHandles) pinHandle.Dispose();
                 cachePinHandles.Clear();
 
                 //Remove from cache
                 ProcedurlineModule.TextureManager.CacheEvictor.RemoveTexture(this);
+
+                //Force the data cache to be treated like it's invalid
+                dataCacheValid = false;
             }
         }
 
@@ -203,6 +212,7 @@ namespace Celeste.Mod.Procedurline {
             //Dispose cached data
             dataCache?.Dispose();
             dataCache = null;
+            dataCacheValid = false;
 
             return true;
         }
@@ -219,7 +229,7 @@ namespace Celeste.Mod.Procedurline {
                 if(IsDisposed) throw new ObjectDisposedException("TextureHandle");
 
                 //Check for already cached data
-                if(dataCache != null) return Task.FromResult<CachePinHandle>(PinCache());
+                if(dataCache != null && dataCacheValid) return Task.FromResult<CachePinHandle>(PinCache());
 
                 //Increment cache pin count
                 IncrementCachePinCount();
@@ -230,6 +240,7 @@ namespace Celeste.Mod.Procedurline {
                     try {
                         await ProcedurlineModule.TextureManager.DownloadData(this, dataCache, dataCancelSrc.Token).ConfigureAwait(false);
                         lock(LOCK) {
+                            dataCacheValid = true;
                             dataFetchTask = null;
                         }
                     } finally {
@@ -264,6 +275,7 @@ namespace Celeste.Mod.Procedurline {
                     //Try to cache data
                     if(ProcedurlineModule.TextureManager.CacheEvictor.CacheTexture(this, false)) {
                         dataCache ??= new TextureData(Width, Height);
+                        dataCacheValid = true;
                         data.Copy(dataCache);
                     }
                 }
@@ -276,7 +288,7 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
-        /// Triggers Everest to load the texture.
+        /// Makes Everest start to load the texture, if it hasn't already been doing so before.
         /// </summary>
         public void TriggerTextureLoad() {
             if(VirtualTexture__Texture_QueuedLoadLock == null) {
@@ -298,13 +310,35 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
+        /// Short circuits Everest's texture loading, and instead immediatly creates a blank texture if possible
+        /// </summary>
+        public void ShortCircuitTextureLoad() {
+            MainThreadHelper.Do(() => {
+                if(Texture != null || IsLoading) return;
+                VirtualTexture.Texture = new Texture2D(Celeste.Instance.GraphicsDevice, Width, Height, false, SurfaceFormat.Color);
+            });
+        }
+
+        /// <summary>
+        /// Checks if the texture is currently being loaded by Everest
+        /// </summary>
+        public bool IsLoading {
+            get {
+                lock(LOCK) {
+                    if(IsDisposed) throw new ObjectDisposedException("TextureHandle");
+                    return VirtualTexture__Texture_QueuedLoadLock.GetValue(vtex) != null;
+                }
+            }
+        }
+
+        /// <summary>
         /// Gets the cached texture data, or null if no data is cached. Note that the returned texture data can become disposed at any time if <see cref="TextureOwner.LOCK" /> isn't held.
         /// </summary>
         public TextureData CachedData {
             get {
                 lock(LOCK) {
                     if(IsDisposed) throw new ObjectDisposedException("TextureHandle");
-                    return dataCache;
+                    return dataCacheValid ? dataCache : null;
                 }
             }
         }
