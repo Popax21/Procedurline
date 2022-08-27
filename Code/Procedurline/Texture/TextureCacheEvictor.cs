@@ -17,8 +17,11 @@ namespace Celeste.Mod.Procedurline {
         private GCCallback gcCallback;
         private Process curProc;
 
-        private LinkedList<TextureHandle> cachedTextures = new LinkedList<TextureHandle>();
         private long totalCacheSize;
+        private LinkedList<TextureHandle> cachedTextures = new LinkedList<TextureHandle>();
+
+        private volatile bool inEvictSweep;
+        private LinkedList<TextureHandle> evictionBacklog = new LinkedList<TextureHandle>();
 
         public TextureCacheEvictor() {
             lock(LOCK) {
@@ -72,31 +75,46 @@ namespace Celeste.Mod.Procedurline {
             lock(LOCK) {
                 if(curProc == null) throw new ObjectDisposedException("TextureCacheEvictor");
 
-                long maxCacheSize = MaxCacheSize;
-                long totalEvictedSize = 0;
-                LinkedListNode<TextureHandle> curEvictionCandidate = cachedTextures.Last;
-                while(curEvictionCandidate != null && (evictAll || totalCacheSize > maxCacheSize)) {
-                    LinkedListNode<TextureHandle> nextCand = curEvictionCandidate.Previous;
+                inEvictSweep = true;
+                try {
+                    long maxCacheSize = MaxCacheSize;
+                    long totalEvictedSize = 0;
+                    LinkedListNode<TextureHandle> curEvictionCandidate = cachedTextures.Last;
+                    while(curEvictionCandidate != null && (evictAll || totalCacheSize > maxCacheSize)) {
+                        LinkedListNode<TextureHandle> nextCand = curEvictionCandidate.Previous;
 
-                    //Try to evict the current candidate
-                    TextureHandle tex = curEvictionCandidate.Value;
-                    if(RemoveTexture(tex)) {
-                        //The eviction was successfull
-                        totalEvictedSize += tex.Width*tex.Height*4;
+                        //Try to evict the current candidate
+                        TextureHandle tex = curEvictionCandidate.Value;
+                        if(RemoveTexture(tex, false)) {
+                            //The eviction was successfull
+                            totalEvictedSize += tex.Width*tex.Height*4;
+                        }
+
+                        curEvictionCandidate = nextCand;
                     }
 
-                    curEvictionCandidate = nextCand;
-                }
+                    if(totalEvictedSize > 0) Logger.Log(LogLevel.Info, ProcedurlineModule.Name, $"Evicted {totalEvictedSize} bytes out of texture data cache [cache size {(totalCacheSize + totalEvictedSize) / 1024}kB -> {totalCacheSize / 1024}kB / max {maxCacheSize / 1024}kB]");
+                    return totalEvictedSize;
+                } finally {
+                    //Clear backlog
+                    inEvictSweep = false;
 
-                if(totalEvictedSize > 0) Logger.Log(LogLevel.Info, ProcedurlineModule.Name, $"Evicted {totalEvictedSize} bytes out of texture data cache [cache size {(totalCacheSize + totalEvictedSize) / 1024}kB -> {totalCacheSize / 1024}kB / max {maxCacheSize / 1024}kB]");
-                return totalEvictedSize;
+                    lock(evictionBacklog) {
+                        foreach(TextureHandle tex in evictionBacklog) RemoveTexture(tex, false);
+                        evictionBacklog.Clear();
+                    }
+                }
             }
         }
 
         internal bool CacheTexture(TextureHandle tex, bool force) {
+            //The caller already holds tex.LOCK
+            //Because of this, we only try to lock the evictor's LOCK when we know we aren't in the cache list
+            //As such, we can't deadlock with EvictInternal, as it only tries to lock the texture lock when we ARE in the cache list
+            if(tex.cacheNode != null) return true;
+
             lock(LOCK) {
                 if(curProc == null) throw new ObjectDisposedException("TextureCacheEvictor");
-                if(tex.cacheNode != null) return true;
 
                 //Check if the texture's cached size is below half of the maxmimum cache size
                 long texSize = tex.Width*tex.Height*4;
@@ -112,20 +130,31 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
-        internal bool RemoveTexture(TextureHandle tex) {
+        internal bool RemoveTexture(TextureHandle tex, bool texRequested=true) {
+            if(texRequested && inEvictSweep) {
+                //The texture asked that it be removed by itself
+                //As such, we already hold tex.LOCK, and could deadlock with EvictInternal
+                //So, when we are currently doing an eviction sweep, simply add this texture to a list of to-be-removed textures, and abort early
+                lock(evictionBacklog) evictionBacklog.AddLast(tex);
+                return false;
+            }
+
             lock(LOCK) {
                 if(curProc == null) throw new ObjectDisposedException("TextureCacheEvictor");
-                if(tex.cacheNode == null) return false;
 
-                //Evict cached data
-                if(!tex.EvictCachedData()) return false;
+                lock(tex.LOCK) {
+                    if(tex.cacheNode == null) return false;
 
-                //Remove from texture list
-                cachedTextures.Remove(tex.cacheNode);
-                tex.cacheNode = null;
-                totalCacheSize -= tex.Width*tex.Height*4;
+                    //Evict cached data
+                    if(!tex.EvictCachedData()) return false;
 
-                return true;
+                    //Remove from texture list
+                    cachedTextures.Remove(tex.cacheNode);
+                    tex.cacheNode = null;
+                    totalCacheSize -= tex.Width*tex.Height*4;
+
+                    return true;
+                }
             }
         }
 

@@ -16,11 +16,10 @@ namespace Celeste.Mod.Procedurline {
         /// <summary>
         /// Represents a handle which keeps a <see cref="TextureHandle" /> forcefully pinned in the texture cache. As long as one of these handles is alive, the texture will be cached and can not be evicted from the cache.
         /// This mechanism is utilized by <see cref="GetTextureData" /> to allow invokers to copy their texture data before potentially disposing the texture data again.
-        /// <b>NOTE: Cache pin handles are NOT threading safe!</b> They have to be only used by one thread at a time, or external locking is required.
         /// </summary>
         public sealed class CachePinHandle : IDisposable {
             public readonly TextureHandle Texture;
-            public bool Alive { get; private set; }
+            public bool Alive { get; internal set; }
 
             internal CachePinHandle(TextureHandle tex, bool incrCount = true) {
                 Texture = tex;
@@ -44,19 +43,23 @@ namespace Celeste.Mod.Procedurline {
             /// Clones the texture's data, and then disposes the <see cref="CachePinHandle" />
             /// </summary>
             public TextureData CloneDataAndDispose() {
-                if(!Alive) throw new ObjectDisposedException("TextureHandle.CachePinHandle");
-                TextureData texData = Texture.CachedData.Clone();
-                Dispose();
-                return texData;
+                lock(Texture.LOCK) {
+                    if(!Alive) throw new ObjectDisposedException("TextureHandle.CachePinHandle");
+                    TextureData texData = Texture.CachedData.Clone();
+                    Dispose();
+                    return texData;
+                }
             }
 
             /// <summary>
             /// Copies the texture's data into another buffer, and then disposes the <see cref="CachePinHandle" />
             /// </summary>
             public void CopyDataAndDispose(TextureData dst, Rectangle? srcRect = null, Rectangle? dstRect = null) {
-                if(!Alive) throw new ObjectDisposedException("TextureHandle.CachePinHandle");
-                Texture.CachedData.Copy(dst, srcRect, dstRect);
-                Dispose();
+                lock(Texture.LOCK) {
+                    if(!Alive) throw new ObjectDisposedException("TextureHandle.CachePinHandle");
+                    Texture.CachedData.Copy(dst, srcRect, dstRect);
+                    Dispose();
+                }
             }
         }
 
@@ -69,8 +72,9 @@ namespace Celeste.Mod.Procedurline {
         private MTexture mtex;
         private bool ownsTex;
 
-        internal int cachePinCount;
         internal LinkedListNode<TextureHandle> cacheNode;
+        private int cachePinCount;
+        private LinkedList<CachePinHandle> cachePinHandles = new LinkedList<CachePinHandle>();
         internal TextureData dataCache;
 
         private SemaphoreSlim dataUploadSem;
@@ -129,6 +133,7 @@ namespace Celeste.Mod.Procedurline {
 
         public override void Dispose() {
             lock(LOCK) {
+                if(IsDisposed) return;
                 base.Dispose();
 
                 //Remove from cached list
@@ -146,6 +151,9 @@ namespace Celeste.Mod.Procedurline {
                 //Dispose the data cache
                 dataCache?.Dispose();
                 dataCache = null;
+
+                foreach(CachePinHandle pinHandle in cachePinHandles) pinHandle.Dispose();
+                cachePinHandles.Clear();
 
                 dataCancelSrc?.Cancel();
                 dataUploadSem?.Dispose();
@@ -178,22 +186,25 @@ namespace Celeste.Mod.Procedurline {
         public void InvalidateCache() {
             lock(LOCK) {
                 if(IsDisposed) throw new ObjectDisposedException("TextureHandle");
+
+                //Force-dispose all cache pin Handles
+                foreach(CachePinHandle pinHandle in cachePinHandles) pinHandle.Dispose();
+                cachePinHandles.Clear();
+
+                //Remove from cache
                 ProcedurlineModule.TextureManager.CacheEvictor.RemoveTexture(this);
             }
         }
 
         internal bool EvictCachedData() {
-            //FIXME This could deadlock!
-            lock(LOCK) {
-                //Check if we're pinned in the cache
-                if(cachePinCount > 0) return false;
+            //Check if we're pinned in the cache
+            if(cachePinCount > 0) return false;
 
-                //Dispose cached data
-                dataCache?.Dispose();
-                dataCache = null;
+            //Dispose cached data
+            dataCache?.Dispose();
+            dataCache = null;
 
-                return true;
-            }
+            return true;
         }
 
         /// <summary>
