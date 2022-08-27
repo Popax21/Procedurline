@@ -36,8 +36,13 @@ namespace Celeste.Mod.Procedurline {
         public TextureHandle ErrorTexture { get; internal set; }
         internal readonly ConcurrentDictionary<VirtualTexture, TextureHandle> textureHandles = new ConcurrentDictionary<VirtualTexture, TextureHandle>();
 
+        public readonly TextureCacheEvictor CacheEvictor;
+
         internal TextureManager(Game game) : base(game) {
             game.Components.Add(this);
+
+            //Create the cache evictor
+            CacheEvictor = new TextureCacheEvictor();
 
             //Create texture scopes
             GlobalScope = new TextureScope("GLOBAL", null);
@@ -51,6 +56,9 @@ namespace Celeste.Mod.Procedurline {
             StaticScope?.Dispose();
             GlobalScope?.Dispose();
             textureHandles?.Clear();
+
+            //Dispose the cache evictor
+            CacheEvictor.Dispose();
 
             Game.Components.Remove(this);
             base.Dispose(disposing);
@@ -98,7 +106,9 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
-        //Creates a texture from the specified texture data
+        /// <summary>
+        /// Creates a texture from the specified texture data
+        /// </summary>
         public async Task<TextureHandle> CreateTexture(string name, TextureScope scope, TextureData data, CancellationToken token = default) {
             token.ThrowIfCancellationRequested();
 
@@ -198,6 +208,21 @@ namespace Celeste.Mod.Procedurline {
                 Celeste.Commands.Log($"{scope}");
                 foreach(TextureOwner owner in scope) Celeste.Commands.Log($"  - {owner}");
             } else Celeste.Commands.Log("Couldn't find texture scope!");
+        }
+
+        [Command("pl_texcache", "Displays information about the Procedurline texture cache")]
+        private static void TEXCACHE() {
+            string FormatBytes(long bytes) => $"{bytes}B / {bytes / 1024}kB / {bytes / (1024*1024)}mB";
+            Celeste.Commands.Log($"Total size: {FormatBytes(ProcedurlineModule.TextureManager.CacheEvictor.TotalCacheSize)}");
+            Celeste.Commands.Log($"Maximum size: {FormatBytes(ProcedurlineModule.TextureManager.CacheEvictor.MaxCacheSize)}");
+            Celeste.Commands.Log($"Current total memory usage: {FormatBytes(ProcedurlineModule.TextureManager.CacheEvictor.CurrentMemoryUsage)}");
+            Celeste.Commands.Log($"Maximum total memory usage: {FormatBytes(ProcedurlineModule.TextureManager.CacheEvictor.MaxMemoryUsage)}");
+        }
+
+        [Command("pl_evcttex", "Evicts all non-pinned data from the Procedurline texture cache")]
+        private static void ECVTTEX() {
+            long totalEvictedSize = ProcedurlineModule.TextureManager.CacheEvictor.EvictAll();
+            Celeste.Commands.Log($"Evicted {totalEvictedSize} bytes [{totalEvictedSize / 1024}kB]");
         }
     }
 }
