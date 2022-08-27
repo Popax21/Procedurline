@@ -5,6 +5,7 @@ namespace Celeste.Mod.Procedurline {
     /// A trivial implementation of an <see cref="IDataProcessor{T, I, D}" /> which simply replaces all data with a constant value.
     /// Additionaly also disposes the old data if requested and it implements <see cref="IDisposable" />.
     /// </summary>
+    /// <seealso cref="IDataProcessor{T, I, D}" />
     public sealed class ConstantDataProcessor<T, I, D> : IDataProcessor<T, I, D> {
         public readonly IScopeRegistrar<T> Registrar;
         public readonly D ConstData;

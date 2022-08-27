@@ -56,6 +56,9 @@ namespace Celeste.Mod.Procedurline {
         internal readonly object LOCK = new object(); //Locking strategy: once a scope lock is held, you CAN NOT lock any other locks, neither scope nor key locks
         internal LinkedList<DataScopeKey> registeredKeys = new LinkedList<DataScopeKey>();
 
+        /// <summary>
+        /// Holds the entry which will be added to <see cref="DataScopeKey" />'s <see cref="DataScopeKey.DataStore" /> once the scope is registered on them. This mechanism can be used to efficiently store auxiliary data together with a given scope.
+        /// </summary>
         public readonly DictionaryEntry? DataStoreEntry;
 
         /// <summary>
@@ -236,6 +239,20 @@ namespace Celeste.Mod.Procedurline {
                 lock(LOCK) lock(dst.LOCK) CopyInternal();
             } else {
                 lock(dst.LOCK) lock(LOCK) CopyInternal();
+            }
+        }
+
+        /// <summary>
+        /// Clones the scope key, returning an almost identical copy of it. The cloned key will not own any objects the original key took ownership of using <see cref="TakeOwnership" />.
+        /// </summary>
+        public virtual DataScopeKey Clone() {
+            DataScopeKey key = new DataScopeKey();
+            try {
+                Copy(key);
+                return key;
+            } catch(Exception) {
+                key.Dispose();
+                throw;
             }
         }
 
