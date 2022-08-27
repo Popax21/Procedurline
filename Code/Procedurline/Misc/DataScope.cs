@@ -7,6 +7,32 @@ using System.Collections.Concurrent;
 
 namespace Celeste.Mod.Procedurline {
     /// <summary>
+    /// Represents something capable of registering the appropiate scopes of a target on a given key. In contrast to <see cref="IScopedTarget" />, which describes a target capable of registering just its own scopes on a given key, this interface allows for an external entity to do the scope assignment.
+    /// </summary>
+    /// <seealso cref="DataScope" />
+    /// <seealso cref="DataScopeKey" />
+    /// <seealso cref="IScopedTarget" />
+    public interface IScopeRegistrar<T> {
+        /// <summary>
+        /// Registers all scopes the target belongs to on the key
+        /// </summary>
+        void RegisterScopes(T target, DataScopeKey key);
+    }
+
+    /// <summary>
+    /// Represents something belonging to a certain set of data scopes, which it's capable of registering on a given key. In contrast to <see cref="IScopeRegistrar{T}" />, which describes a third party registrar capable of regstering scopes for arbitrary targets, this interface allows for a single target to just register its own set of scopes it belongs to.
+    /// </summary>
+    /// <seealso cref="DataScope" />
+    /// <seealso cref="DataScopeKey" />
+    /// <seealso cref="IScopeRegistrar{T}" />
+    public interface IScopedTarget {
+        /// <summary>
+        /// Registers all scopes this target belongs to on the key
+        /// </summary>
+        void RegisterScopes(DataScopeKey key);
+    }
+
+    /// <summary>
     /// Represents something which has validity tied to or related to one or multiple data scopes, and as such can be invalidated. This can be scope keys, or entire data scopes themselves.
     /// </summary>
     /// <seealso cref="DataScope" />
@@ -26,11 +52,19 @@ namespace Celeste.Mod.Procedurline {
     /// </summary>
     /// <seealso cref="DataScopeKey" />
     /// <seealso cref="IScopeRegistrar{T}" />
-    public class DataScope : IScopedInvalidatable, IDisposable, IReadOnlyCollection<DataScopeKey> {
+    public class DataScope : IDisposable, IScopedInvalidatable, IReadOnlyCollection<DataScopeKey> {
         internal readonly object LOCK = new object(); //Locking strategy: once a scope lock is held, you CAN NOT lock any other locks, neither scope nor key locks
         internal LinkedList<DataScopeKey> registeredKeys = new LinkedList<DataScopeKey>();
 
-        public DataScope(string name) => Name = name;
+        public readonly DictionaryEntry? DataStoreEntry;
+
+        /// <summary>
+        /// If <paramref name="name" /> is <c>null</c>, the scope is a so called "anonymous scope". These scopes aren't explicitly listed in debug views.
+        /// </summary>
+        public DataScope(string name, DictionaryEntry? storeEntry = null) {
+            Name = name;
+            DataStoreEntry = storeEntry;
+        }
 
         public virtual void Dispose() {
             LinkedList<DataScopeKey> invalKeys = null;
@@ -115,7 +149,7 @@ namespace Celeste.Mod.Procedurline {
         public IEnumerator<DataScopeKey> GetEnumerator() => registeredKeys.GetEnumerator();
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-        public override string ToString() => $"{GetType().Name} [{Name}]";
+        public override string ToString() => $"{GetType()} [{Name ?? "<anonymous>"}]";
 
         public virtual string Name { get; }
         public bool IsDisposed { get { lock(LOCK) return registeredKeys != null; } }
@@ -137,7 +171,7 @@ namespace Celeste.Mod.Procedurline {
     /// Represents a data scope key. For details, see <c cref="DataScope">DataScope</c>
     /// </summary>
     /// <seealso cref="DataScope" />
-    public class DataScopeKey : IScopedTarget, IScopedInvalidatable, IDisposable, IEquatable<DataScopeKey>, IReadOnlyCollection<DataScope> {
+    public class DataScopeKey : IDisposable, IScopedTarget, IScopedInvalidatable, IEquatable<DataScopeKey>, IReadOnlyCollection<DataScope> {
         private const int HASH_MAGIC = unchecked((int) 0xcafec0de);
         private static long NEXT_ID = 0;
 
@@ -160,6 +194,11 @@ namespace Celeste.Mod.Procedurline {
         internal bool isInvalidating;
         private bool isValid;
         private int hashCode;
+
+        /// <summary>
+        /// Contains the dictionary used to store scope data entries. These entries can be used to store auxiliary data along with data keys, which can then be efficiently queried by e.g. data processors.
+        /// </summary>
+        public readonly ConcurrentDictionary<object, object> DataStore = new ConcurrentDictionary<object, object>();
 
         private List<IDisposable> ownedObjects = new List<IDisposable>();
         private bool ownsSelf = false;
@@ -237,6 +276,13 @@ namespace Celeste.Mod.Procedurline {
 
                 scopes.TryAdd(scope, scope.registeredKeys.AddLast(this));
 
+                //If the scope has a data store entry, add it to the key's store
+                if(scope.DataStoreEntry is DictionaryEntry entry) {
+                    if(!DataStore.TryAdd(entry.Key, entry.Value)) {
+                        Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"DataScopeKey auxiliary data store key conflict for key '{entry.Key}' [type {entry.Key.GetType()}]!");
+                    }
+                }
+
                 //Update hash code
                 //Yes, using XORs for hashing is usually not a good idea, but we have to ensure that no matter the order of scopes registration, the same hash code is returned
                 hashCode = unchecked(hashCode ^ scope.GetHashCode());
@@ -297,6 +343,7 @@ namespace Celeste.Mod.Procedurline {
                 //Cleanup
                 RemoveFromScopes();
                 scopes.Clear();
+                DataStore.Clear();
                 isInvalidating = false;
                 isValid = true;
                 hashCode = HASH_MAGIC;
@@ -379,11 +426,15 @@ namespace Celeste.Mod.Procedurline {
             lock(LOCK) {
                 if(scopes == null) return "<DISPOSED>";
 
+                int numAnonm = 0;
                 StringBuilder builder = new StringBuilder();
                 foreach(DataScope scope in scopes.Keys) {
-                    if(builder.Length > 0) builder.Append(delim);
-                    builder.Append(scope.Name);
+                    if(scope.Name != null) {
+                        if(builder.Length > 0) builder.Append(delim);
+                        builder.Append(scope.Name);
+                    } else numAnonm++;
                 }
+                if(numAnonm > 0) builder.Append($"<{numAnonm} anonymous>");
                 return builder.ToString();
             }
         }
@@ -419,31 +470,5 @@ namespace Celeste.Mod.Procedurline {
         /// Invoked by <seealso cref="InvalidateRegistrars" /> when the key's registrars are invalidated, with <see cref="DataScopeKey.LOCK" /> held.
         /// </summary>
         public event Action<IScopedInvalidatable> OnInvalidateRegistrars;
-    }
-
-    /// <summary>
-    /// Represents something capable of registering the appropiate scopes of a target on a given key. In contrast to <see cref="IScopedTarget" />, which describes a target capable of registering just its own scopes on a given key, this interface allows for an external entity to do the scope assignment.
-    /// </summary>
-    /// <seealso cref="DataScope" />
-    /// <seealso cref="DataScopeKey" />
-    /// <seealso cref="IScopedTarget" />
-    public interface IScopeRegistrar<T> {
-        /// <summary>
-        /// Registers all scopes the target belongs to on the key
-        /// </summary>
-        void RegisterScopes(T target, DataScopeKey key);
-    }
-
-    /// <summary>
-    /// Represents something belonging to a certain set of data scopes, which it's capable of registering on a given key. In contrast to <see cref="IScopeRegistrar{T}" />, which describes a third party registrar capable of regstering scopes for arbitrary targets, this interface allows for a single target to just register its own set of scopes it belongs to.
-    /// </summary>
-    /// <seealso cref="DataScope" />
-    /// <seealso cref="DataScopeKey" />
-    /// <seealso cref="IScopeRegistrar{T}" />
-    public interface IScopedTarget {
-        /// <summary>
-        /// Registers all scopes this target belongs to on the key
-        /// </summary>
-        void RegisterScopes(DataScopeKey key);
     }
 }
