@@ -208,8 +208,8 @@ namespace Celeste.Mod.Procedurline {
             string FormatBytes(long bytes) => $"{bytes}B / {bytes / 1024}kB / {bytes / (1024*1024)}mB";
             Celeste.Commands.Log($"Total size: {FormatBytes(ProcedurlineModule.TextureManager.CacheEvictor.TotalCacheSize)}");
             Celeste.Commands.Log($"Maximum size: {FormatBytes(ProcedurlineModule.TextureManager.CacheEvictor.MaxCacheSize)}");
-            Celeste.Commands.Log($"Current total memory usage: {FormatBytes(ProcedurlineModule.TextureManager.CacheEvictor.CurrentMemoryUsage)}");
-            Celeste.Commands.Log($"Maximum total memory usage: {FormatBytes(ProcedurlineModule.TextureManager.CacheEvictor.MaxMemoryUsage)}");
+            Celeste.Commands.Log($"Current memory usage: {FormatBytes(ProcedurlineModule.TextureManager.CacheEvictor.CurrentMemoryUsage)}");
+            Celeste.Commands.Log($"Maximum memory usage: {FormatBytes(ProcedurlineModule.TextureManager.CacheEvictor.MaxMemoryUsage)}");
         }
 
         [Command("pl_evcttex", "Evicts all non-pinned data from the Procedurline texture cache")]
