@@ -14,6 +14,7 @@ namespace Celeste.Mod.Procedurline {
     public sealed class TextureCacheEvictor : IDisposable {
         private readonly object LOCK = new object();
 
+        private GCCallback gcCallback;
         private Process curProc;
 
         private LinkedList<TextureHandle> cachedTextures = new LinkedList<TextureHandle>();
@@ -21,6 +22,9 @@ namespace Celeste.Mod.Procedurline {
 
         public TextureCacheEvictor() {
             lock(LOCK) {
+                //Create a GC callback
+                gcCallback = new GCCallback(GCCallback);
+
                 //Obtain a handle for the current process
                 curProc = Process.GetCurrentProcess();
 
@@ -33,6 +37,10 @@ namespace Celeste.Mod.Procedurline {
         public void Dispose() {
             lock(LOCK) {
                 if(curProc == null) return;
+
+                //Dispose the GC callback
+                gcCallback?.Dispose();
+                gcCallback = null;
 
                 //Unregister hooks
                 Everest.Events.Level.OnLoadLevel -= LevelLoadHandler;
@@ -135,6 +143,7 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
+        private void GCCallback() => DoSweep();
         private void LevelLoadHandler(Level level, Player.IntroTypes intro, bool fromLoader) => DoSweep();
         private void SceneTransitionHook(On.Monocle.Engine.orig_OnSceneTransition orig, Monocle.Engine engine, Monocle.Scene from, Monocle.Scene to) {
             orig(engine, from, to);
