@@ -26,7 +26,7 @@ namespace Celeste.Mod.Procedurline {
         private SpriteManager spriteManager;
         private PlayerManager playerManager;
 
-        private DataScope globalScope, sceneScope, levelScope, spriteScope, staticScope, playerScope;
+        private DataScope globalScope, sceneScope, levelScope, spriteScope, dynamicScope, playerScope;
 
         public override void Load() {
             dispPool = new DisposablePool();
@@ -42,7 +42,7 @@ namespace Celeste.Mod.Procedurline {
             sceneScope = dispPool.Add(new DataScope("$SCENE"));
             levelScope = dispPool.Add(new DataScope("$LEVEL"));
             spriteScope = dispPool.Add(new DataScope("$SPRITE"));
-            staticScope = dispPool.Add(new DataScope("$STATIC"));
+            dynamicScope = dispPool.Add(new DataScope("$DYNAMIC"));
             playerScope = dispPool.Add(new DataScope("$PLAYER"));
 
             //Apply content hooks and patches
@@ -119,7 +119,7 @@ namespace Celeste.Mod.Procedurline {
         public static DataScope SceneScope => Instance?.sceneScope;
         public static DataScope LevelScope => Instance?.levelScope;
         public static DataScope SpriteScope => Instance?.spriteScope;
-        public static DataScope StaticScope => Instance?.staticScope;
+        public static DataScope DynamicScope => Instance?.dynamicScope;
         public static DataScope PlayerScope => Instance?.playerScope;
 
         [Command("pl_invlscope", "Invalidates the specified Procedurline data scope (default: $GLOBAL)")]
@@ -129,7 +129,7 @@ namespace Celeste.Mod.Procedurline {
                 case "$SCENE": SceneScope?.Invalidate(); break;
                 case "$LEVEL": LevelScope?.Invalidate(); break;
                 case "$SPRITE": SpriteScope?.Invalidate(); break;
-                case "$STATIC": StaticScope?.Invalidate(); break;
+                case "$DYNAMIC": DynamicScope?.Invalidate(); break;
                 case "$PLAYER": PlayerScope?.Invalidate(); break;
                 default: Celeste.Commands.Log("Unknown scope!"); break;
             }

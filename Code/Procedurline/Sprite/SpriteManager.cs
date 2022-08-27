@@ -26,7 +26,7 @@ namespace Celeste.Mod.Procedurline {
             public AnimationCacheProcessor(SpriteManager manager) => Manager = manager;
 
             public void RegisterScopes(Sprite target, DataScopeKey key) {
-                Manager.AnimationProcessor.RegisterScopes(target, key);
+                Manager.DynamicAnimationProcessor.RegisterScopes(target, key);
             }
 
             public Task<bool> ProcessDataAsync(Sprite sprite, DataScopeKey key, string animId, AsyncRef<Sprite.Animation> animRef, CancellationToken token = default) {
@@ -39,24 +39,23 @@ namespace Celeste.Mod.Procedurline {
                 token.ThrowIfCancellationRequested();
 
                 try {
-                    Stopwatch timer = new Stopwatch();
-                    timer.Start();
-
                     //Get sprite animation data
                     using(SpriteAnimationData animData = (animRef.Data != null) ? await Manager.GetAnimationData(animRef, token) : null) {
                         //Run processor
+                        Stopwatch timer = ProcedurlineModule.Settings.LogProcessingTimes ? Stopwatch.StartNew() : null;
+    
                         AsyncRef<SpriteAnimationData> procAnimData = new AsyncRef<SpriteAnimationData>(animData);
-                        if(!await Manager.AnimationProcessor.ProcessDataAsync(sprite, scache.Key, animId, procAnimData, token)) {
+                        if(!await Manager.DynamicAnimationProcessor.ProcessDataAsync(sprite, scache.Key, animId, procAnimData, token)) {
                             //Optimize by returning the original animation
                             return false;
                         }
 
+                        if(timer != null) {
+                            Logger.Log(ProcedurlineModule.Name, $"Finished processing sprite '{scache.Key.SpriteID}' animation '{animId}' (took {timer.ElapsedMilliseconds}ms)");
+                        }
+
                         //Create new animation
                         animRef.Data = await Manager.CreateAnimation(animId, scache.TextureScope, procAnimData, token);
-
-                        if(ProcedurlineModule.Settings.LogProcessingTimes) {
-                            Logger.Log(ProcedurlineModule.Name, $"Done processing sprite '{scache.Key.SpriteID}' animation '{animId}' (took {timer.ElapsedMilliseconds}ms)");
-                        }
 
                         return true;
                     }
@@ -70,30 +69,33 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
-        /// Contains the animation mixer processor. It is the main entry point for dynamic animation processing, and also invokes the <see cref="AnimationProcessor" /> at order 0.
+        /// Contains the dynamic animation mixer processor. It is the main entry point for dynamic animation processing, and also invokes the <see cref="DynamicAnimationProcessor" /> at order 0.
         /// By adding processor to it you can "mix" the animations displayed for any sprite instance by swapping the <see cref="Sprite.Animation" /> instances with arbitrary other ones.
         /// <b>NOTE: If you mix in <see cref="CustomSpriteAnimation" /> instances, you HAVE TO register the <see cref="CustomSprite" />'s scopes by calling <see cref="CustomSprite.RegisterScopes" />. While Procedurline ensures that custom sprite processing has finished before utilizing any animation data, it DOES NOT forward custom sprite invalidation, which you HAVE TO do manually.</b>
         /// </summary>
-        public readonly CompositeAsyncDataProcessor<Sprite, string, Sprite.Animation> AnimationMixer;
-        public readonly CompositeAsyncDataProcessor<Sprite, string, SpriteAnimationData> AnimationProcessor;
+        public readonly CompositeAsyncDataProcessor<Sprite, string, Sprite.Animation> DynamicAnimationMixer;
+        public readonly CompositeAsyncDataProcessor<Sprite, string, SpriteAnimationData> DynamicAnimationProcessor;
         public readonly SpriteAnimationCache AnimationCache;
         private readonly List<ILHook> animationHooks = new List<ILHook>();
 
         private readonly ConditionalWeakTable<Sprite, string> spriteIds = new ConditionalWeakTable<Sprite, string>();
-        private readonly ConcurrentDictionary<Sprite, ProcessedSprite> processedSprites = new ConcurrentDictionary<Sprite, ProcessedSprite>();
-        private bool debugProcessedSprites = false;
+        private readonly ConcurrentDictionary<Sprite, SpriteHandler> spriteHandlers = new ConcurrentDictionary<Sprite, SpriteHandler>();
+        private bool debugSpriteHandlers = false;
 
         internal SpriteManager(Game game) : base(game) {
             game.Components.Add(this);
 
             //Setup animation processing and caching
-            AnimationMixer = new CompositeAsyncDataProcessor<Sprite, string, Sprite.Animation>();
-            AnimationProcessor = new CompositeAsyncDataProcessor<Sprite, string, SpriteAnimationData>();
+            DynamicAnimationMixer = new CompositeAsyncDataProcessor<Sprite, string, Sprite.Animation>();
+            DynamicAnimationProcessor = new CompositeAsyncDataProcessor<Sprite, string, SpriteAnimationData>();
             AnimationCache = new SpriteAnimationCache(new TextureScope("ANIMCACHE", ProcedurlineModule.TextureManager.GlobalScope), new AnimationCacheProcessor(this));
-            AnimationMixer.AddProcessor(0, AnimationCache);
+            DynamicAnimationMixer.AddProcessor(0, AnimationCache);
 
             //Register default scope registrar
-            AnimationMixer.AddProcessor(int.MinValue, new DelegateDataProcessor<Sprite, string, Sprite.Animation>(registerScopes: RegisterDefaultScopes).WrapAsync());
+            DynamicAnimationMixer.AddProcessor(int.MinValue, new DelegateDataProcessor<Sprite, string, Sprite.Animation>(registerScopes: (sprite, key) => {
+                RegisterSpriteScopes(sprite, key);
+                ProcedurlineModule.DynamicScope.RegisterKey(key);
+            }).WrapAsync());
 
             //Install hooks
             using(new DetourContext(ProcedurlineModule.HOOK_PRIO)) {
@@ -139,10 +141,10 @@ namespace Celeste.Mod.Procedurline {
         }
 
         protected override void Dispose(bool disposing) {
-            //Dispose processed sprites
-            lock(processedSprites) {
-                foreach(ProcessedSprite psprite in processedSprites.Values) psprite.Dispose();
-                processedSprites.Clear();
+            //Dispose sprite handlers
+            lock(spriteHandlers) {
+                foreach(SpriteHandler handler in spriteHandlers.Values) handler.Dispose();
+                spriteHandlers.Clear();
             }
 
             //Cleanup animation cache and processing
@@ -171,6 +173,18 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
+        /// Registers the sprite's default scopes on the key.
+        /// </summary>
+        public void RegisterSpriteScopes(Sprite sprite, DataScopeKey key, bool noCustom = false) {
+            ProcedurlineModule.GlobalScope.RegisterKey(key);
+            ProcedurlineModule.SpriteScope.RegisterKey(key);
+            if(sprite is PlayerSprite || sprite.Entity is Player) ProcedurlineModule.PlayerScope.RegisterKey(key);
+
+            //If the sprite is a custom one, register its scopes on the key as well
+            if(!noCustom && sprite is CustomSprite customSprite) customSprite.RegisterScopes(key);
+        }
+
+        /// <summary>
         /// Gets the <see cref="SpriteAnimationData" /> for the specified animation.
         /// The resulting animation data object will contain newly created <see cref="TextureData" /> objects, so it's required to call <see cref="SpriteAnimationData.Dispose" /> once you finished using it.
         /// </summary>
@@ -185,13 +199,14 @@ namespace Celeste.Mod.Procedurline {
             if(anim is CustomSpriteAnimation customAnim) {
                 //Wait for the animation to finish updating
                 try {
-                    await customAnim.UpdateData().OrCancelled(token);
+                    await ProcessCustomAnimation(customAnim).OrCancelled(token);
                 } catch(Exception e) {
-                    //Static animation processing exceptions aren't our responsibility
-                    Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Trying to get sprite animation data for failed processed static sprite animation: {e}");
+                    //Custom animation processing exceptions aren't our responsibility
+                    Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Encountered an error processing sprite animation data for custom sprite animation '{customAnim.AnimationID}': {e}");
                 }
 
                 //We have to get the animation's data on the main thread
+                //Also MainThreadHelper.Get is broken
                 TaskCompletionSource<Tuple<float, Chooser<string>, MTexture[]>> tcs = new TaskCompletionSource<Tuple<float, Chooser<string>, MTexture[]>>();
                 MainThreadHelper.Do(() => tcs.SetResult(new Tuple<float, Chooser<string>, MTexture[]>(customAnim.Delay, customAnim.Goto, customAnim.Frames)));
 
@@ -222,8 +237,8 @@ namespace Celeste.Mod.Procedurline {
                 };
             }
 
+            Task<TextureHandle.CachePinHandle>[] frameTasks = new Task<TextureHandle.CachePinHandle>[animFrames.Length];
             try {
-                Task<TextureData>[] frameTasks = new Task<TextureData>[animFrames.Length];
                 for(int i = 0; i < frameTasks.Length; i++) {
                     frameTasks[i] = ProcedurlineModule.TextureManager.GetHandle(animFrames[i].Texture).GetTextureData(token);
                 }
@@ -235,7 +250,7 @@ namespace Celeste.Mod.Procedurline {
                 for(int i = 0; i < frameTasks.Length; i++) {
                     Rectangle clipRect = animFrames[i].ClipRect;
                     TextureData texData = new TextureData(clipRect.Width, clipRect.Height);
-                    frameTasks[i].Result.Copy(texData, srcRect: clipRect);
+                    frameTasks[i].Result.CopyDataAndDispose(texData, srcRect: clipRect);
 
                     animData.Frames[i] = new SpriteAnimationData.AnimationFrame() {
                         TextureData = texData,
@@ -248,6 +263,12 @@ namespace Celeste.Mod.Procedurline {
 
                 return animData;
             } catch(Exception) {
+                for(int i = 0; i < frameTasks.Length; i++) {
+                    _ = frameTasks[i].ContinueWithOrInvoke(t => {
+                        if(t.Status == TaskStatus.RanToCompletion) t.Result.Dispose();
+                    });
+                }
+
                 for(int i = 0; i < animData.Frames.Length; i++) {
                     animData.Frames[i].TextureData?.Dispose();
                 }
@@ -306,12 +327,21 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
-        /// Processes the given animation data. Note that you should almost never be calling this yourself, instead use <see cref="GetProcessedAnimation" />
+        /// Processes the given custom animation data, ensuring it's running on the right thread and the engine is blocked if required. This should be used by functions which could potentially start custom sprite animation processing....
         /// </summary>
-        public async Task<Sprite.Animation> ProcessAnimation(Sprite sprite, string animId, Sprite.Animation anim, CancellationToken token = default) {
-            AsyncRef<Sprite.Animation> animRef = new AsyncRef<Sprite.Animation>(anim);
-            if(!await AnimationMixer.ProcessDataAsync(sprite, null, animId, animRef, token)) return anim;
-            return animRef.Data;
+        public Task ProcessCustomAnimation(CustomSpriteAnimation anim) {
+            Task processTask;
+            if(ProcedurlineModule.Settings.UseThreadPool) {
+                processTask = Task.Run(() => anim.ProcessData());
+            } else {
+                processTask = anim.ProcessData();
+            }
+
+            if(!ProcedurlineModule.Settings.AsynchronousStaticProcessing) {
+                ProcedurlineModule.GlobalManager.BlockEngineOnTask(processTask);
+            }
+
+            return processTask;
         }
 
         /// <summary>
@@ -332,69 +362,56 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
-        /// Creates a <see cref="ProcessedSprite" /> for the sprite. You are resposible for properly disposing it using <see cref="ProcessedSprite.Dispose" /> once the sprite's not used anymore.
+        /// Creates a <see cref="SpriteHandler" /> for the sprite. You are resposible for properly disposing it using <see cref="SpriteHandler.Dispose" /> once the sprite's not used anymore.
         /// This method should be used for sprites which Procedurline wouldn't pick up as active by itself.
         /// </summary>
         /// <returns>
-        /// <c>null</c> if the sprite can't have / already has an associated processed sprite
+        /// <c>null</c> if the sprite can't have / already has an associated sprite handler
         /// </returns>
-        public ProcessedSprite CreateProcessedSprite(Sprite sprite) {
+        public SpriteHandler CreateSpriteHandler(Sprite sprite) {
             string spriteId = GetSpriteID(sprite);
             if(spriteId == null) return null;
 
-            lock(processedSprites) {
-                if(processedSprites.ContainsKey(sprite)) return null;
-                ProcessedSprite psprite = new ProcessedSprite(sprite, spriteId, false);
-                processedSprites.TryAdd(sprite, psprite);
-                return psprite;
+            lock(spriteHandlers) {
+                if(spriteHandlers.ContainsKey(sprite)) return null;
+                SpriteHandler handler = new SpriteHandler(sprite, spriteId, false);
+                spriteHandlers.TryAdd(sprite, handler);
+                return handler;
             }
         }
 
         /// <summary>
-        /// Returns the sprite's <see cref="ProcessedSprite" /> wrapper, which is responsible for all sprite modifications/processing.
+        /// Returns the sprite's <see cref="SpriteHandler" /> wrapper, which is responsible for all sprite modifications/processing.
         /// </summary>
         /// <returns>
-        /// <c>null</c> if the sprite doesn't have an associated processed sprite
+        /// <c>null</c> if the sprite doesn't have an associated sprite handler
         /// </returns>
-        public ProcessedSprite GetProcessedSprite(Sprite sprite) {
-            lock(processedSprites) {
-                return processedSprites.TryGetValue(sprite, out ProcessedSprite psprite) ? psprite : null;
+        public SpriteHandler GetSpriteHandler(Sprite sprite) {
+            lock(spriteHandlers) {
+                return spriteHandlers.TryGetValue(sprite, out SpriteHandler handler) ? handler : null;
             }
-        }
-
-        /// <summary>
-        /// Gets the dynamically processed version of a sprite's animation, or the original animation if it hasn't been processed yet. This simply proxies to <see cref="ProcessedSprite.GetAnimation" />
-        /// </summary>
-        public Sprite.Animation GetProcessedAnimation(Sprite sprite, string animId) => GetProcessedSprite(sprite)?.GetAnimation(animId) ?? (sprite.Animations.TryGetValue(animId, out Sprite.Animation anim) ? anim : null);
-
-        private void RegisterDefaultScopes(Sprite sprite, DataScopeKey key) {
-            ProcedurlineModule.GlobalScope.RegisterKey(key);
-            if(sprite is PlayerSprite || sprite.Entity is Player) ProcedurlineModule.PlayerScope.RegisterKey(key);
-
-            //If the sprite is a custom one, register its scopes on the key as well
-            if(sprite is CustomSprite customSprite) customSprite.RegisterScopes(key);
         }
 
         private void AddSpriteRef(Sprite sprite) {
-            lock(processedSprites) {
-                if(!processedSprites.TryGetValue(sprite, out ProcessedSprite psprite)) {
+            lock(spriteHandlers) {
+                if(!spriteHandlers.TryGetValue(sprite, out SpriteHandler handler)) {
                     //Get the sprite's ID
                     string spriteId = GetSpriteID(sprite);
                     if(spriteId == null) return;
 
-                    //Create a processed sprite
-                    processedSprites.TryAdd(sprite, psprite = new ProcessedSprite(sprite, spriteId, true));
+                    //Create a sprite handler
+                    spriteHandlers.TryAdd(sprite, handler = new SpriteHandler(sprite, spriteId, true));
                 }
-                if(psprite.OwnedByManager) psprite.numReferences++;
+                if(handler.OwnedByManager) handler.numManagerRefs++;
             }
         }
 
         private void RemoveSpriteRef(Sprite sprite) {
-            lock(processedSprites) {
-                if(!processedSprites.TryGetValue(sprite, out ProcessedSprite psprite)) return;
-                if(psprite.OwnedByManager && --psprite.numReferences <= 0) {
-                    psprite.Dispose();
-                    processedSprites.TryRemove(sprite, out _);
+            lock(spriteHandlers) {
+                if(!spriteHandlers.TryGetValue(sprite, out SpriteHandler handler)) return;
+                if(handler.OwnedByManager && --handler.numManagerRefs <= 0) {
+                    handler.Dispose();
+                    spriteHandlers.TryRemove(sprite, out _);
                 }
             }
         }
@@ -448,7 +465,7 @@ namespace Celeste.Mod.Procedurline {
             Sprite clone = orig(sprite, target);
             spriteIds.Remove(clone);
             if(GetSpriteID(sprite) is string spriteId) spriteIds.Add(clone, spriteId);
-            GetProcessedSprite(clone)?.ResetCache();
+            GetSpriteHandler(clone)?.ResetCache();
             return clone;
         }
 
@@ -466,34 +483,39 @@ namespace Celeste.Mod.Procedurline {
             Sprite sprt = orig(bank, sprite, id);
             spriteIds.Remove(sprt);
             spriteIds.Add(sprt, id);
-            GetProcessedSprite(sprt)?.ResetCache();
+            GetSpriteHandler(sprt)?.ResetCache();
             return sprt;
         }
 
         private Sprite.Animation SpriteDictGetHook(Dictionary<string, Sprite.Animation> dict, string id, Sprite sprite) {
-            //Forward to ProcessedSprite
-            ProcessedSprite psprite = GetProcessedSprite(sprite);
-            if(psprite == null) return dict[id];
-            return psprite.GetAnimation(id) ?? throw new KeyNotFoundException($"Animation '{id}' not found!");
+            //Forward to the sprite handler
+            SpriteHandler handler = GetSpriteHandler(sprite);
+            if(handler == null) return dict[id];
+            Sprite.Animation anim = handler.GetProcessedAnimation(id) ?? throw new KeyNotFoundException($"Animation '{id}' not found!");
+    
+            //If it's a custom animation, start its processing
+            if(anim is CustomSpriteAnimation customAnim) ProcessCustomAnimation(customAnim);
+
+            return anim;
         }
 
-        private void DrawProcessedSpriteDebug(Scene scene, Matrix mat) {
+        private void DrawSpriteHandlerDebug(Scene scene, Matrix mat) {
             Draw.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.Default, RasterizerState.CullNone, null, Celeste.ScreenMatrix);
 
             //Do layout and draw passes
-            Dictionary<ProcessedSprite, Rectangle> rects = null;
+            Dictionary<SpriteHandler, Rectangle> rects = null;
             bool isLayout = true;
             for(int i = 0; i < 10; i++) {
                 if(i == 9) isLayout = false; //Force the last pass to be the draw pass
 
                 bool didChange = false;
-                Dictionary<ProcessedSprite, Rectangle> nrects = new Dictionary<ProcessedSprite, Rectangle>();
+                Dictionary<SpriteHandler, Rectangle> nrects = new Dictionary<SpriteHandler, Rectangle>();
                 foreach(Entity entity in scene.Entities) {
                     foreach(Component comp in entity.Components) {
                         if(!(comp is Sprite sprite)) continue;
-                        ProcessedSprite psprite = GetProcessedSprite(sprite);
-                        if(psprite == null) continue;
-                        didChange |= psprite.DrawDebug(scene, mat, rects, nrects, isLayout);
+                        SpriteHandler handler = GetSpriteHandler(sprite);
+                        if(handler == null) continue;
+                        didChange |= handler.DrawDebug(scene, mat, rects, nrects, isLayout);
                     }
                 }
                 rects = nrects;
@@ -507,17 +529,17 @@ namespace Celeste.Mod.Procedurline {
 
         private void SceneRenderHook(On.Monocle.Scene.orig_Render orig, Scene scene) {
             orig(scene);
-            if(debugProcessedSprites) DrawProcessedSpriteDebug(scene, Matrix.Identity);
+            if(debugSpriteHandlers) DrawSpriteHandlerDebug(scene, Matrix.Identity);
         }
 
         private void LevelRenderHook(On.Celeste.Level.orig_Render orig, Level level) {
             orig(level);
-            if(debugProcessedSprites) DrawProcessedSpriteDebug(level, level.Camera.Matrix * Matrix.CreateScale(6));
+            if(debugSpriteHandlers) DrawSpriteHandlerDebug(level, level.Camera.Matrix * Matrix.CreateScale(6));
         }
 
-        [Command("pl_dbgprcsprts", "Enable/Disable debug rendering of Procedurline processed sprites")]
-        private static void DBGPRCSPRTS() {
-            ProcedurlineModule.SpriteManager.debugProcessedSprites = !ProcedurlineModule.SpriteManager.debugProcessedSprites;
+        [Command("pl_dbgsprthndls", "Enable/Disable debug rendering of Procedurline sprite handlers")]
+        private static void DBGSPRTHNDLS() {
+            ProcedurlineModule.SpriteManager.debugSpriteHandlers = !ProcedurlineModule.SpriteManager.debugSpriteHandlers;
         }
     }
 }

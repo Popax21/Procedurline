@@ -10,16 +10,16 @@ using Monocle;
 
 namespace Celeste.Mod.Procedurline {
     /// <summary>
-    /// Represents a processed sprite. Processed sprite objects are created and bound to each Monocle sprite by the <see cref="SpriteManager" />, which also allows access to them.
-    /// Processed sprites are responsible for integrating the backend sprite animation processing logic with the "frontend" <see cref="Sprite" /> / <see cref="CustomSprite" /> objects, by handling animation hooks, animation invalidation, async processing, etc.
+    /// Represents a sprite handler. Sprite handler objects are created and bound to each Monocle sprite by the <see cref="SpriteManager" />, which also allows access to them, or alternatively can be created manually using <see cref="SpriteManager.CreateSpriteHandler" />.
+    /// Sprite handlers are responsible for integrating the backend sprite animation processing logic with the "frontend" <see cref="Sprite" /> / <see cref="CustomSprite" /> objects, by handling animation hooks, animation invalidation, async processing, etc.
     /// </summary>
-    public sealed class ProcessedSprite : IDisposable {
+    public sealed class SpriteHandler : IDisposable {
         public readonly object LOCK = new object();
         public readonly Sprite Sprite;
         public readonly string SpriteID;
         public readonly DataScopeKey ScopeKey;
         public readonly bool OwnedByManager;
-        internal int numReferences;
+        internal int numManagerRefs;
         private bool hasValidKey;
         private bool customSpriteRegistered;
 
@@ -29,18 +29,18 @@ namespace Celeste.Mod.Procedurline {
         private CancellationTokenSource cancelSrc;
         private Dictionary<string, Task<Sprite.Animation>> procTasks = new Dictionary<string, Task<Sprite.Animation>>(StringComparer.OrdinalIgnoreCase);
 
-        internal ProcessedSprite(Sprite sprite, string spriteId, bool ownedByManager) {
+        internal SpriteHandler(Sprite sprite, string spriteId, bool ownedByManager) {
             Sprite = sprite;
             SpriteID = spriteId;
             ScopeKey = new DataScopeKey();
             OwnedByManager = ownedByManager;
 
-            ScopeKey.OnInvalidate += OnScopeInvalidate;
-            ScopeKey.OnInvalidateRegistrars += OnScopeInvalidate;
+            ScopeKey.OnInvalidate += ScopeInvalidated;
+            ScopeKey.OnInvalidateRegistrars += ScopeInvalidated;
 
             //If the sprite is a custom sprite, register it
             if(sprite is CustomSprite customSprite) {
-                customSprite.RegisterSprite(this);
+                customSprite.RegisterHandler(this);
                 customSpriteRegistered = true;
             }
 
@@ -64,19 +64,30 @@ namespace Celeste.Mod.Procedurline {
                 //Dispose the scope key
                 ScopeKey?.Dispose();
 
-                //If the sprite is a static sprite, unregister its handlers
+                //If the sprite is a custom sprite, unregister it
                 if(Sprite is CustomSprite customSprite && customSpriteRegistered) {
-                    customSprite.UnregisterSprite(this);
+                    customSprite.UnregisterHandler(this);
                     customSpriteRegistered = false;
                 }
             }
         }
 
         /// <summary>
-        /// Gets the specific processed animation for the sprite.
+        /// Gets the specified original animation for the sprite
+        /// </summary>
+        /// <returns>
+        /// The animation, or <c>null</c> if no animation exists
+        /// </returns>
+        public Sprite.Animation GetOriginalAnimation(string animId) => Sprite.Animations.TryGetValue(animId, out Sprite.Animation anim) ? anim : null;
+
+        /// <summary>
+        /// Gets the specified processed animation for the sprite.
         /// If the processed animation isn't cached, this starts an asynchronous processing task, and the original animation is returned.
         /// </summary>
-        public Sprite.Animation GetAnimation(string animId) {
+        /// <returns>
+        /// The animation, or <c>null</c> if no animation exists
+        /// </returns>
+        public Sprite.Animation GetProcessedAnimation(string animId) {
             lock(ScopeKey.LOCK)
             lock(LOCK) {
                 if(procTasks == null) throw new ObjectDisposedException("ProcessedSprite");
@@ -87,7 +98,7 @@ namespace Celeste.Mod.Procedurline {
                 //If we don't have a valid scope key, obtain a new one
                 while(!hasValidKey || !ScopeKey.IsValid) {
                     ScopeKey.Reset();
-                    ProcedurlineModule.SpriteManager.AnimationMixer.RegisterScopes(Sprite, ScopeKey);
+                    ProcedurlineModule.SpriteManager.DynamicAnimationMixer.RegisterScopes(Sprite, ScopeKey);
                     hasValidKey = true;
                 }
                 //We might race and not have an valid key outside of the loop, but in that case, our callbacks will reset our cache soon anyway
@@ -96,7 +107,7 @@ namespace Celeste.Mod.Procedurline {
                 if(!procTasks.TryGetValue(animId, out Task<Sprite.Animation> procTask)) {
                     //Start new processor task
                     if(cancelSrc == null) cancelSrc = new CancellationTokenSource();
-                    procTasks.Add(animId, procTask = GetProcessorTask(animId, origAnim, cancelSrc.Token));
+                    procTasks.Add(animId, procTask = ProcessAnimation(animId, origAnim, cancelSrc.Token));
                     procTask.ContinueWithOrInvoke(t => {
                         if(t.Status == TaskStatus.RanToCompletion) {
                             MainThreadHelper.Do(() => Sprite.ReloadAnimation());  
@@ -147,19 +158,14 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
-        private async Task<Sprite.Animation> GetProcessorTask(string animId, Sprite.Animation origAnim, CancellationToken token) {
-            //Process the original animation
+        private async Task<Sprite.Animation> ProcessAnimation(string animId, Sprite.Animation origAnim, CancellationToken token) {
             AsyncRef<Sprite.Animation> animRef = new AsyncRef<Sprite.Animation>(origAnim);
-            await ProcedurlineModule.SpriteManager.AnimationMixer.ProcessDataAsync(Sprite, ScopeKey, animId, animRef, token);
-
-            //If the returned animation is a custom animation, make sure it finished processing
-            if(animRef.Data is CustomSpriteAnimation customAnim) await customAnim.UpdateData();
-
+            await ProcedurlineModule.SpriteManager.DynamicAnimationMixer.ProcessDataAsync(Sprite, ScopeKey, animId, animRef, token);
             return animRef.Data;
         }
 
         /// <summary>
-        /// Resets the sprite's own cache of processor tasks.
+        /// Resets the sprite's cache of processor tasks.
         /// </summary>
         public void ResetCache() {
             lock(LOCK) {
@@ -176,16 +182,17 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
-        private void OnScopeInvalidate(IScopedInvalidatable key) => ResetCache();
+        private void ScopeInvalidated(IScopedInvalidatable key) => ResetCache();
+        internal void AnimationReloaded(CustomSpriteAnimation anim) => Sprite.ReloadAnimation(anim.AnimationID);
 
-        internal bool DrawDebug(Scene scene, Matrix mat, Dictionary<ProcessedSprite, Rectangle> rects, Dictionary<ProcessedSprite, Rectangle> nrects, bool layoutPass) {
+        internal bool DrawDebug(Scene scene, Matrix mat, Dictionary<SpriteHandler, Rectangle> rects, Dictionary<SpriteHandler, Rectangle> nrects, bool layoutPass) {
             //Build string to be drawn
             StringBuilder str = new StringBuilder();
 
             str.AppendLine(SpriteID);
 
             if(OwnedByManager) {
-                str.AppendLine($"MANAGED {numReferences} refs");
+                str.AppendLine($"MANAGED {numManagerRefs} refs");
             } else {
                 str.AppendLine($"UNMANAGED");
             }
@@ -215,7 +222,7 @@ namespace Celeste.Mod.Procedurline {
                         (Math.Max(r.Top, vr.Top) - Math.Min(r.Bottom, vr.Bottom))
                     ;
 
-                    foreach((ProcessedSprite ps, Rectangle pr) in (rects ?? nrects)) {
+                    foreach((SpriteHandler ps, Rectangle pr) in (rects ?? nrects)) {
                         if(ps == this) continue;
                         if(pr.Intersects(r)) score -=
                             (Math.Max(r.Left, pr.Left) - Math.Min(r.Right, pr.Right)) *

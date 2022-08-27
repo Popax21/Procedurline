@@ -80,7 +80,7 @@ namespace Celeste.Mod.Procedurline {
         public static void ReloadAnimation(this Sprite sprite, string animId = null) {
             //Get the currently playing animation
             string curAnim = sprite.CurrentAnimationID;
-            if(string.IsNullOrEmpty(curAnim)) curAnim = sprite.LastAnimationID;
+            if(!sprite.Animating || string.IsNullOrEmpty(curAnim)) curAnim = sprite.LastAnimationID;
             if(!string.IsNullOrEmpty(curAnim) && (animId == null || curAnim.Equals(animId, StringComparison.OrdinalIgnoreCase))) {
                 sprite.Texture = null;
 
@@ -90,7 +90,7 @@ namespace Celeste.Mod.Procedurline {
                     Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Currently playing sprite animation '{curAnim}' [sprite '{ProcedurlineModule.SpriteManager?.GetSpriteID(sprite) ?? sprite.Path ?? "?????"}'] doesn't exit anymore after reload!");
                     sprite.Stop();
                 } else {
-                    if(!string.IsNullOrEmpty(sprite.CurrentAnimationID)) {
+                    if(sprite.Animating && !string.IsNullOrEmpty(sprite.CurrentAnimationID)) {
                         //Replace the internal animation reference
                         Sprite_currentAnimation.SetValue(sprite, anim);
 
@@ -101,9 +101,17 @@ namespace Celeste.Mod.Procedurline {
                     } else if(anim.Goto != null) {
                         //We now have a Goto, utilize it
                         sprite.Play(anim.Goto.Choose(), true, false);
+                    } else if(sprite.CurrentAnimationFrame < anim.Frames.Length) {
+                        //Animation length increased, play rest of animation
+                        int frame = sprite.CurrentAnimationFrame;
+                        sprite.Play(curAnim, true, false);
+                        Sprite_CurrentAnimationFrame.SetValue(sprite, frame);
+                        sprite.SetFrame(anim.Frames[frame]);
                     } else {
-                        Sprite_CurrentAnimationFrame.SetValue(sprite, anim.Frames.Length - 1);
-                        sprite.SetFrame(anim.Frames[anim.Frames.Length - 1]);
+                        //Show first/last frame of animation
+                        int frame = Math.Sign(Celeste.TimeRate * Celeste.TimeRateB) < 0 ? 0 : (anim.Frames.Length - 1);
+                        Sprite_CurrentAnimationFrame.SetValue(sprite, frame);
+                        sprite.SetFrame(anim.Frames[frame]);
                     }
                 }
             }

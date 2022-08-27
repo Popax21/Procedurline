@@ -8,7 +8,7 @@ namespace Celeste.Mod.Procedurline.Demo {
         public DemoBooster(Vector2 pos) : base(pos, default, false) {}
 
         protected override Sprite ProcessSprite(Sprite origSprite) {
-            if(SPRITE == null) SPRITE = new StaticSprite("pldemo-booster", origSprite, new SpriteColorMatrixProcessor(ColorUtils.GrayscaleColorMatrix, 0.05f, 0.05f).WrapAsync<Sprite, string, SpriteAnimationData>());
+            if(SPRITE == null) SPRITE = new DerivedSprite("pldemo-booster", origSprite, new SpriteColorMatrixProcessor(ColorUtils.GrayscaleColorMatrix, 0.05f, 0.05f).WrapAsync<Sprite, string, SpriteAnimationData>());
             return SPRITE.Clone();
         }
 

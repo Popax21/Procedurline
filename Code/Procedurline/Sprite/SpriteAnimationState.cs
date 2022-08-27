@@ -1,4 +1,6 @@
+using System;
 using Microsoft.Xna.Framework;
+
 using Monocle;
 
 namespace Celeste.Mod.Procedurline {
@@ -9,7 +11,7 @@ namespace Celeste.Mod.Procedurline {
         /// <summary>
         /// Transfers this sprite's current animation ID and frame to the given target sprite. This can be used to seamlessly switch between two sprites with identical animations at runtime.
         /// </summary>
-        public static void TransferAnimation(Sprite from, Sprite to) => new SpriteAnimationState(from).Apply(to);
+        public static void TransferState(Sprite from, Sprite to) => new SpriteAnimationState(from).Apply(to);
 
         public Vector2 Position;
         public Vector2? Justify;
@@ -23,7 +25,7 @@ namespace Celeste.Mod.Procedurline {
         public SpriteAnimationState(Sprite sprite) {
             Position = sprite.Position;
             Justify = sprite.Justify;
-            CurrentAnimationID = sprite.CurrentAnimationID;
+            CurrentAnimationID = sprite.Animating ? sprite.CurrentAnimationID : null;
             LastAnimationID = sprite.LastAnimationID;
             CurrentAnimationFrame = sprite.CurrentAnimationFrame;
             AnimationTimer = sprite.GetAnimationTimer();
@@ -42,27 +44,29 @@ namespace Celeste.Mod.Procedurline {
             string curAnim = CurrentAnimationID;
             if(string.IsNullOrEmpty(curAnim)) curAnim = LastAnimationID;
 
-            //Get the target's corresponding animation
-            if(!(target.GetProcessedAnimation(curAnim) is Sprite.Animation anim)) {
-                Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Trying to apply sprite animation '{curAnim}' to target [sprite '{ProcedurlineModule.SpriteManager?.GetSpriteID(target) ?? target.Path ?? "?????"}'] which doesn't have it!");
-                target.Stop();
-                return false;
-            }
+            if(!string.IsNullOrEmpty(curAnim)) {
+                //Get the target's corresponding animation
+                if(!(target.GetProcessedAnimation(curAnim) is Sprite.Animation anim)) {
+                    Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Trying to apply sprite animation '{curAnim}' to target [sprite '{ProcedurlineModule.SpriteManager?.GetSpriteID(target) ?? target.Path ?? "?????"}'] which doesn't have it!");
+                    target.Stop();
+                    return false;
+                }
 
-            if(!string.IsNullOrEmpty(CurrentAnimationID)) {
-                //Transfer over animation ID, frame index and animation timer
-                //Clamp the frame index to the new animation frame length
-                target.Play(curAnim, true, false);
-                target.SetAnimationFrame(Calc.Clamp(CurrentAnimationFrame, 0, anim.Frames.Length) - 1);
-                target.SetAnimationTimer(AnimationTimer);
-            } else if(!string.IsNullOrEmpty(curAnim)) {
-                //Check if there now is a Goto
-                if(anim.Goto != null) {
+                if(!string.IsNullOrEmpty(CurrentAnimationID)) {
+                    //Transfer over animation ID, frame index and animation timer
+                    //Clamp the frame index to the new animation frame length
+                    target.Play(curAnim, true, false);
+                    target.SetAnimationFrame(Calc.Clamp(CurrentAnimationFrame, 0, anim.Frames.Length) - 1);
+                    target.SetAnimationTimer(AnimationTimer);
+                } else if(anim.Goto != null) {
+                    //There now is a Goto
                     target.Play(anim.Goto.Choose(), true, false);
                 } else {
+                    //Show first/last frame of animation
+                    int frame = Math.Sign(Celeste.TimeRate * Celeste.TimeRateB) < 0 ? 0 : (anim.Frames.Length - 1);
                     target.Stop();
-                    target.SetAnimationFrame(anim.Frames.Length - 1);
-                    target.SetFrame(anim.Frames[anim.Frames.Length - 1]);
+                    target.SetFrame(anim.Frames[frame]);
+                    target.SetAnimationFrame(frame);
                 }
             } else {
                 //No animation is currently playing
