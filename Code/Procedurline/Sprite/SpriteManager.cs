@@ -20,49 +20,35 @@ namespace Celeste.Mod.Procedurline {
     /// Allows for users to add data processors which can transparently modify sprite animations before rendering.
     /// </summary>
     public sealed class SpriteManager : GameComponent {
-        private sealed class AnimationCacheProcessor : IAsyncDataProcessor<Sprite, string, Sprite.Animation> {
+        private sealed class DataProcessorWrapper : IAsyncDataProcessor<Sprite, string, Sprite.Animation> {
             public readonly SpriteManager Manager;
+            public readonly SpriteAnimationDataProcessor Processor;
 
-            public AnimationCacheProcessor(SpriteManager manager) => Manager = manager;
-
-            public void RegisterScopes(Sprite target, DataScopeKey key) {
-                Manager.DynamicAnimationProcessor.RegisterScopes(target, key);
+            public DataProcessorWrapper(SpriteManager manager) {
+                Manager = manager;
+                Processor = new SpriteAnimationDataProcessor(manager.DynamicAnimationProcessor, (_, k, _) => ((SpriteAnimationCache.ScopedCache) Manager.DynamicAnimationCache.GetScopedData(k)).TextureScope);
             }
 
-            public Task<bool> ProcessDataAsync(Sprite sprite, DataScopeKey key, string animId, AsyncRef<Sprite.Animation> animRef, CancellationToken token = default) {
-                SpriteAnimationCache.ScopedCache scache = (SpriteAnimationCache.ScopedCache) Manager.AnimationCache.GetScopedData(key);
-                if(ProcedurlineModule.Settings.UseThreadPool) return Task.Run(() => ProcessAnimation(sprite, scache, animId, animRef, token));
-                else return ProcessAnimation(sprite, scache, animId, animRef, token);
-            }
+            public void RegisterScopes(Sprite target, DataScopeKey key) => Processor.RegisterScopes(target, key);
 
-            private async Task<bool> ProcessAnimation(Sprite sprite, SpriteAnimationCache.ScopedCache scache, string animId, AsyncRef<Sprite.Animation> animRef, CancellationToken token = default) {
-                token.ThrowIfCancellationRequested();
-
+            public async Task<bool> ProcessDataAsync(Sprite target, DataScopeKey key, string animId, AsyncRef<Sprite.Animation> animRef, CancellationToken token = default) {
+                SpriteScopeKey skey = (SpriteScopeKey) key;
                 try {
-                    //Get sprite animation data
-                    using(SpriteAnimationData animData = (animRef.Data != null) ? await Manager.GetAnimationData(animRef, token) : null) {
-                        //Run processor
-                        Stopwatch timer = ProcedurlineModule.Settings.LogProcessingTimes ? Stopwatch.StartNew() : null;
-    
-                        AsyncRef<SpriteAnimationData> procAnimData = new AsyncRef<SpriteAnimationData>(animData);
-                        if(!await Manager.DynamicAnimationProcessor.ProcessDataAsync(sprite, scache.Key, animId, procAnimData, token)) {
-                            //Optimize by returning the original animation
-                            return false;
-                        }
+                    //Proxy to actual processor
+                    Stopwatch timer = ProcedurlineModule.Settings.LogProcessingTimes ? Stopwatch.StartNew() : null;
 
-                        if(timer != null) {
-                            Logger.Log(ProcedurlineModule.Name, $"Finished processing sprite '{scache.Key.SpriteID}' animation '{animId}' (took {timer.ElapsedMilliseconds}ms)");
-                        }
+                    bool didModify = await (ProcedurlineModule.Settings.UseThreadPool ?
+                        Task.Run(() => Processor.ProcessDataAsync(target, skey, animId, animRef, token)) :
+                        Processor.ProcessDataAsync(target, skey, animId, animRef, token)
+                    );
 
-                        //Create new animation
-                        animRef.Data = await Manager.CreateAnimation(animId, scache.TextureScope, procAnimData, token);
+                    if(timer != null) Logger.Log(ProcedurlineModule.Name, $"Finished processing sprite '{skey.SpriteID}' animation '{animId}' (took {timer.ElapsedMilliseconds}ms)");
 
-                        return true;
-                    }
+                    return didModify;
                 } catch(Exception e) {
                     token.ThrowIfCancellationRequested();
-                    if(!scache.Key.IsValid) return false;
-                    Logger.Log(LogLevel.Error, ProcedurlineModule.Name, $"Error while processing sprite '{scache.Key.SpriteID}' animation '{animId}': {e}");
+                    if(!skey.IsValid) return false;
+                    Logger.Log(LogLevel.Error, ProcedurlineModule.Name, $"Error while processing sprite '{skey.SpriteID}' animation '{animId}': {e}");
                     throw;
                 }
             }
@@ -75,7 +61,7 @@ namespace Celeste.Mod.Procedurline {
         /// </summary>
         public readonly CompositeAsyncDataProcessor<Sprite, string, Sprite.Animation> DynamicAnimationMixer;
         public readonly CompositeAsyncDataProcessor<Sprite, string, SpriteAnimationData> DynamicAnimationProcessor;
-        public readonly SpriteAnimationCache AnimationCache;
+        public readonly SpriteAnimationCache DynamicAnimationCache;
         private readonly List<ILHook> animationHooks = new List<ILHook>();
 
         private readonly ConditionalWeakTable<Sprite, string> spriteIds = new ConditionalWeakTable<Sprite, string>();
@@ -85,13 +71,12 @@ namespace Celeste.Mod.Procedurline {
         internal SpriteManager(Game game) : base(game) {
             game.Components.Add(this);
 
-            //Setup animation processing and caching
+            //Setup dynamic animation processing and caching
             DynamicAnimationMixer = new CompositeAsyncDataProcessor<Sprite, string, Sprite.Animation>();
             DynamicAnimationProcessor = new CompositeAsyncDataProcessor<Sprite, string, SpriteAnimationData>();
-            AnimationCache = new SpriteAnimationCache(new TextureScope("ANIMCACHE", ProcedurlineModule.TextureManager.GlobalScope), new AnimationCacheProcessor(this));
-            DynamicAnimationMixer.AddProcessor(0, AnimationCache);
+            DynamicAnimationCache = new SpriteAnimationCache(new TextureScope("$DYNANIMCACHE", ProcedurlineModule.TextureManager.GlobalScope), new DataProcessorWrapper(this));
 
-            //Register default scope registrar
+            DynamicAnimationMixer.AddProcessor(0, DynamicAnimationCache);
             DynamicAnimationMixer.AddProcessor(int.MinValue, new DelegateDataProcessor<Sprite, string, Sprite.Animation>(registerScopes: (sprite, key) => {
                 RegisterSpriteScopes(sprite, key);
                 ProcedurlineModule.DynamicScope.RegisterKey(key);
@@ -167,8 +152,8 @@ namespace Celeste.Mod.Procedurline {
             foreach(ILHook h in animationHooks) h.Dispose();
             animationHooks.Clear();
 
-            AnimationCache?.Dispose();
-            AnimationCache.TextureScope?.Dispose();
+            DynamicAnimationCache?.Dispose();
+            DynamicAnimationCache.TextureScope?.Dispose();
 
             Game.Components.Remove(this);
             base.Dispose(disposing);
@@ -454,9 +439,11 @@ namespace Celeste.Mod.Procedurline {
         private void ImageRenderHook(On.Monocle.Image.orig_Render orig, Image img) {
             if(img is Sprite sprite && GetSpriteHandler(sprite) is SpriteHandler handler) {
                 //If there is a queued cache reset, execute it
-                if(handler.queueCacheReset) {
-                    handler.ResetCache();
-                    handler.queueCacheReset = false;
+                lock(handler.LOCK) {
+                    if(handler.queueReload) {
+                        sprite.ReloadAnimation();
+                        handler.queueReload = false;
+                    }
                 }
             }
 

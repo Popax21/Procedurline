@@ -24,7 +24,7 @@ namespace Celeste.Mod.Procedurline {
         public readonly bool OwnedByManager;
         internal int numManagerRefs;
 
-        internal bool queueCacheReset;
+        internal bool queueReload;
 
         private bool didError = false;
         private Dictionary<string, Sprite.Animation> errorAnimations = new Dictionary<string, Sprite.Animation>(StringComparer.OrdinalIgnoreCase);
@@ -46,8 +46,7 @@ namespace Celeste.Mod.Procedurline {
                 customSpriteRegistered = true;
             }
 
-            //Reload the current animation at the end of the frame
-            Celeste.Scene.OnEndOfFrame += () => Sprite.ReloadAnimation();
+            queueReload = true;
         }
 
         public void Dispose() {
@@ -177,14 +176,11 @@ namespace Celeste.Mod.Procedurline {
                 cancelSrc = null;
                 procTasks.Clear();
 
-                MainThreadHelper.Do(() => Sprite.ReloadAnimation());
+                queueReload = true;
             }
         }
 
-        private void ScopeInvalidated(IScopedInvalidatable key) {
-            lock(LOCK) queueCacheReset = true;
-        }
-
+        private void ScopeInvalidated(IScopedInvalidatable key) => ResetCache();
         internal void AnimationReloaded(CustomSpriteAnimation anim) => Sprite.ReloadAnimation(anim.AnimationID);
 
         internal bool DrawDebug(Scene scene, Matrix mat, Dictionary<SpriteHandler, Rectangle> rects, Dictionary<SpriteHandler, Rectangle> nrects, bool layoutPass) {

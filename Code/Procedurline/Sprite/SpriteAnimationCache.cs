@@ -37,7 +37,7 @@ namespace Celeste.Mod.Procedurline {
             if(id == null) return null;
             return new SpriteScopeKey(id);
         }
-    
+
         protected override AsyncDataProcessorCache<Sprite, string, Sprite.Animation>.ScopedCache CreateScopedData(DataScopeKey key) => new ScopedCache(this,(SpriteScopeKey) key);
     }
 }
