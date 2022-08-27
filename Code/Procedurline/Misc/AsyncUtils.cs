@@ -90,6 +90,11 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
+        /// Applies a specific wrapper function on a task's result.
+        /// </summary>
+        public static async Task<R> WrapResult<T, R>(this Task<T> task, Func<T, R> wrapper) => wrapper(await task);
+
+        /// <summary>
         /// Returns an <see cref="IAsyncDataProcessor{T, I, D}" /> wrapping this <see cref="IDataProcessor{T, I, D}" />
         /// </summary>
         public static IAsyncDataProcessor<T, I, D> WrapAsync<T, I, D>(this IDataProcessor<T, I, D> proc) => new AsyncProcessorWrapper<T, I, D>(proc);
