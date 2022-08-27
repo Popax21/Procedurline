@@ -74,7 +74,7 @@ namespace Celeste.Mod.Procedurline {
             //Setup dynamic animation processing and caching
             DynamicAnimationMixer = new CompositeAsyncDataProcessor<Sprite, string, Sprite.Animation>();
             DynamicAnimationProcessor = new CompositeAsyncDataProcessor<Sprite, string, SpriteAnimationData>();
-            DynamicAnimationCache = new SpriteAnimationCache(new TextureScope("$DYNANIMCACHE", ProcedurlineModule.TextureManager.GlobalScope), new DataProcessorWrapper(this));
+            DynamicAnimationCache = new SpriteAnimationCache(new TextureScope("DYNANIMCACHE", ProcedurlineModule.TextureManager.GlobalScope), new DataProcessorWrapper(this));
 
             DynamicAnimationMixer.AddProcessor(0, DynamicAnimationCache);
             DynamicAnimationMixer.AddProcessor(int.MinValue, new DelegateDataProcessor<Sprite, string, Sprite.Animation>(registerScopes: (sprite, key) => {
