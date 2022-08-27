@@ -192,6 +192,11 @@ namespace Celeste.Mod.Procedurline {
         /// </summary>
         public readonly object VALIDITY_LOCK = new object();
 
+        /// <summary>
+        /// When <c>true</c>, calls to <see cref="InvalidateRegistrars" /> behave the same as calls to <see cref="Invalidate" />
+        /// </summary>
+        public readonly bool InvalidateOnRegistrarInvalidation;
+
         //Protected using LOCK, individual entries are additionally secured using their scope's lock
         internal ConcurrentDictionary<DataScope, LinkedListNode<DataScopeKey>> scopes = new ConcurrentDictionary<DataScope, LinkedListNode<DataScopeKey>>();
         internal bool isInvalidating;
@@ -207,6 +212,7 @@ namespace Celeste.Mod.Procedurline {
         private bool ownsSelf = false;
 
         public DataScopeKey() => Reset();
+        public DataScopeKey(bool invalOnRegistrarInval) : this() => InvalidateOnRegistrarInvalidation = invalOnRegistrarInval;
 
         /// <summary>
         /// Disposes the scope key. This effectively performs a call to <see cref="Invalidate" /> before destryoing the key.
@@ -243,7 +249,7 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
-        /// Clones the scope key, returning an almost identical copy of it. The cloned key will not own any objects the original key took ownership of using <see cref="TakeOwnership" />.
+        /// Clones the scope key, returning an almost identical copy of it. The cloned key will not own any objects the original key took ownership of using <see cref="TakeOwnership" />, and have <see cref="InvalidateOnRegistrarInvalidation" /> set to <c>false</c>.
         /// </summary>
         public virtual DataScopeKey Clone() {
             DataScopeKey key = new DataScopeKey();
@@ -308,7 +314,7 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
-        /// Invalidates the scope key, invoking <see cref="OnInvalidate" /> . Invalidated scope keys can't be registered on new scopes or take ownership of objects until they're reset using <see cref="Reset" />.
+        /// Invalidates the scope key, invoking <see cref="OnInvalidate" />. Invalidated scope keys can't be registered on new scopes or take ownership of objects until they're reset using <see cref="Reset" />.
         /// Also disposes all owned objects which the key took ownership of using <see cref="TakeOwnership" />, including itself, if the key owns itself.
         /// <b>NOTE: Make sure you DO NOT hold any scope locks when calling this function, otherwise deadlocks could occur!</b>
         /// </summary>
@@ -334,13 +340,14 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
-        /// Invalidates the scope key's registrars, which does nothing other than invoking <see cref="OnInvalidateRegistrars" />.
+        /// Invalidates the scope key's registrars, which does nothing other than invoking <see cref="OnInvalidateRegistrars" />, unless <see cref="InvalidateOnRegistrarInvalidation" /> is <c>true</c>, in which case this simply calls <see cref="Invalidate" />.
         /// This event should be used to notify the component responsible for registring the key's scopes (usually through an <see cref="IScopeRegistrar{T}" />) that their target could potentially be assigned different scopes after the invalidation.
         /// <b>NOTE: Make sure you DO NOT hold any scope locks when calling this function, otherwise deadlocks could occur!</b>
         /// </summary>
         public virtual void InvalidateRegistrars() {
             lock(LOCK) {
                 if(scopes == null) throw new ObjectDisposedException("DataScopeKey");
+                if(InvalidateOnRegistrarInvalidation) Invalidate();
                 if(!IsValid) return;
 
                 //Invoke event
@@ -443,15 +450,21 @@ namespace Celeste.Mod.Procedurline {
             lock(LOCK) {
                 if(scopes == null) return "<DISPOSED>";
 
-                int numAnonm = 0;
                 StringBuilder builder = new StringBuilder();
+
+                int numAnonm = 0;
                 foreach(DataScope scope in scopes.Keys) {
                     if(scope.Name != null) {
                         if(builder.Length > 0) builder.Append(delim);
                         builder.Append(scope.Name);
                     } else numAnonm++;
                 }
-                if(numAnonm > 0) builder.Append($"<{numAnonm} anonymous>");
+
+                if(numAnonm > 0) {
+                    if(builder.Length > 0) builder.Append(delim);
+                    builder.Append($"<{numAnonm} anonymous>");
+                }
+
                 return builder.ToString();
             }
         }

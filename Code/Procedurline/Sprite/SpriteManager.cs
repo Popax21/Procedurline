@@ -105,6 +105,7 @@ namespace Celeste.Mod.Procedurline {
                 On.Monocle.Component.EntityRemoved += ComponentEntityRemovedHook;
                 On.Monocle.Component.SceneEnd += ComponentSceneEndHook;
 
+                On.Monocle.Image.Render += ImageRenderHook;
                 On.Monocle.Sprite.CreateClone += SpriteCreateCloneHook;
                 On.Monocle.Sprite.CloneInto += SpriteCloneIntoHook;
                 On.Monocle.SpriteBank.Create += SpriteBankCreateHook;
@@ -154,6 +155,7 @@ namespace Celeste.Mod.Procedurline {
             On.Monocle.Component.EntityRemoved -= ComponentEntityRemovedHook;
             On.Monocle.Component.SceneEnd -= ComponentSceneEndHook;
 
+            On.Monocle.Image.Render += ImageRenderHook;
             On.Monocle.Sprite.CreateClone -= SpriteCreateCloneHook;
             On.Monocle.Sprite.CloneInto -= SpriteCloneIntoHook;
             On.Monocle.SpriteBank.Create -= SpriteBankCreateHook;
@@ -418,36 +420,47 @@ namespace Celeste.Mod.Procedurline {
 
         private void ComponentAddedHook(On.Monocle.Component.orig_Added orig, Component comp, Entity entity) {
             orig(comp, entity);
-            if(!(comp is Sprite sprite)) return;
 
-            if(entity.Scene == null) return;
-            AddSpriteRef(sprite);
+            if(comp is Sprite sprite) {
+                if(entity.Scene == null) return;
+                AddSpriteRef(sprite);
+            }
         }
 
         private void ComponentRemovedHook(On.Monocle.Component.orig_Removed orig, Component comp, Entity entity) {
-            orig(comp, entity);
-            if(!(comp is Sprite sprite)) return;
+            if(comp is Sprite sprite) {
+                if(entity.Scene == null) return;
+                RemoveSpriteRef(sprite);
+            }
 
-            if(entity.Scene == null) return;
-            RemoveSpriteRef(sprite);
+            orig(comp, entity);
         }
 
         private void ComponentEntityAddedHook(On.Monocle.Component.orig_EntityAdded orig, Component comp, Scene scene) {
             orig(comp, scene);
-            if(!(comp is Sprite sprite)) return;
-            AddSpriteRef(sprite);
+            if(comp is Sprite sprite) AddSpriteRef(sprite);
         }
 
         private void ComponentEntityRemovedHook(On.Monocle.Component.orig_EntityRemoved orig, Component comp, Scene scene) {
+            if(comp is Sprite sprite) RemoveSpriteRef(sprite);
             orig(comp, scene);
-            if(!(comp is Sprite sprite)) return;
-            RemoveSpriteRef(sprite);
         }
 
         private void ComponentSceneEndHook(On.Monocle.Component.orig_SceneEnd orig, Component comp, Scene scene) {
+            if(comp is Sprite sprite) RemoveSpriteRef(sprite);
             orig(comp, scene);
-            if(!(comp is Sprite sprite)) return;
-            RemoveSpriteRef(sprite);
+        }
+
+        private void ImageRenderHook(On.Monocle.Image.orig_Render orig, Image img) {
+            if(img is Sprite sprite && GetSpriteHandler(sprite) is SpriteHandler handler) {
+                //If there is a queued cache reset, execute it
+                if(handler.queueCacheReset) {
+                    handler.ResetCache();
+                    handler.queueCacheReset = false;
+                }
+            }
+
+            orig(img);
         }
 
         private Sprite SpriteCreateCloneHook(On.Monocle.Sprite.orig_CreateClone orig, Sprite sprite) {

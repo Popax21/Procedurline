@@ -24,6 +24,7 @@ namespace Celeste.Mod.Procedurline {
 
         protected DataScopeMultiplexer(string name, int count) {
             //Create data scopes
+            Count = count;
             MuxScope = new DataScope(name);
             IndexScopes = new DataScope[count];
             for(int i = 0; i < count; i++) IndexScopes[i] = new DataScope(null, new DictionaryEntry(indexStoreKey, i));

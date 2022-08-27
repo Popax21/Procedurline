@@ -13,7 +13,7 @@ namespace Celeste.Mod.Procedurline {
         /// </summary>
         public static void TransferState(Sprite from, Sprite to) => new SpriteAnimationState(from).Apply(to);
 
-        public Vector2 Position;
+        public Vector2 Position, Origin;
         public Vector2? Justify;
         public string CurrentAnimationID, LastAnimationID;
         public int CurrentAnimationFrame;
@@ -24,6 +24,7 @@ namespace Celeste.Mod.Procedurline {
         /// </summary>
         public SpriteAnimationState(Sprite sprite) {
             Position = sprite.Position;
+            Origin = sprite.Origin;
             Justify = sprite.Justify;
             CurrentAnimationID = sprite.Animating ? sprite.CurrentAnimationID : null;
             LastAnimationID = sprite.LastAnimationID;
@@ -37,6 +38,7 @@ namespace Celeste.Mod.Procedurline {
         public bool Apply(Sprite target) {
             //Transfer over basic parameters
             target.Position = Position;
+            target.Origin = Origin;
             target.Justify = Justify;
             target.SetLastAnimationID(LastAnimationID);
 

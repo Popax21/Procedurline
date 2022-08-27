@@ -64,9 +64,9 @@ namespace Celeste.Mod.Procedurline {
     /// <summary>
     /// A Monocle component which holds an <see cref="DisposablePool" />
     /// </summary>
-    public sealed class DisposablePoolComponent : Component {
+    public sealed class DisposablePoolComponent : Component, IDisposable {
         /// <summary>
-        /// Creates an <see cref="DisposablePoolComponent" />, adds it to a given entity, and returns the disposable pool
+        /// Creates an <see cref="DisposablePoolComponent" />, adds it to a given entity, and returns its disposable pool
         /// </summary>
         public static DisposablePool AddTo(Entity entity) {
             DisposablePoolComponent comp = new DisposablePoolComponent();
@@ -78,19 +78,24 @@ namespace Celeste.Mod.Procedurline {
 
         public DisposablePoolComponent() : base(false, false) {}
 
+        public void Dispose() {
+            //Delay disposal of the pool till the end of the frame, otherwise we might run into some realy nasty race conditions regarding component callback order
+            Celeste.Scene.OnEndOfFrame += Pool.Dispose;
+        }
+
         public override void Removed(Entity entity) {
             base.Removed(entity);
-            Pool.Dispose();
+            this.Dispose();
         }
 
         public override void EntityRemoved(Scene scene) {
             base.EntityRemoved(scene);
-            Pool.Dispose();
+            this.Dispose();
         }
 
         public override void SceneEnd(Scene scene) {
             base.SceneEnd(scene);
-            Pool.Dispose();
+            this.Dispose();
         }
     }
 }

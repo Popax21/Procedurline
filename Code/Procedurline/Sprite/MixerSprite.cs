@@ -41,17 +41,22 @@ namespace Celeste.Mod.Procedurline {
                     await Sprite.Mixer.ProcessDataAsync(Sprite, scopeKey, AnimationID, animRef, token);
                 }
 
-                //Replace the animation
                 Sprite.Animation anim = animRef.Data;
                 if(anim == null) Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"MixerSprite '{Sprite.SpriteID}' mixer did not return an animation for animation id '{AnimationID}'!");
 
+                //If it's a custom animation, wait for it to finish processing
+                if(anim is CustomSpriteAnimation customAnim) await customAnim.ProcessData();
+
+                //Replace the animation
                 MainThreadHelper.Do(() => {
                     lock(LOCK) {
                         lock(Sprite.LOCK) {
                             //Mark the animation as valid
+                            Logger.Log("TEST", "mixer mvalid");
                             if(!MarkValid(valToken)) return;
 
                             //Replace the animation
+                            Logger.Log("TEST", $"mixer replace {anim.Frames.Length}");
                             ReplaceData(anim);
                             mixedAnim = anim;
                         }

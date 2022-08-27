@@ -28,6 +28,7 @@ namespace Celeste.Mod.Procedurline {
         public CustomBooster(Vector2 pos, Color color, bool isRed) : base(pos, isRed) {
             spriteColor = color;
             IsRed = isRed;
+            RecolorGFX(color);
         }
 
         public override void Added(Scene scene) {

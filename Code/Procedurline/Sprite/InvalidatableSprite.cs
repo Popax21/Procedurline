@@ -95,6 +95,7 @@ namespace Celeste.Mod.Procedurline {
         protected readonly object LOCK = new object();
 
         private bool isDisposed;
+        public bool IsDisposed { get { lock(LOCK) return isDisposed; } }
 
         public readonly DataScopeKey ScopeKey;
         private bool scopeKeyValid;
@@ -102,9 +103,8 @@ namespace Celeste.Mod.Procedurline {
         private CancellationTokenSource tokenSrc;
 
         protected InvalidatableSprite(string spriteId, Atlas atlas, string path) : base(spriteId, atlas, path) {
-            ScopeKey = new DataScopeKey();
+            ScopeKey = new DataScopeKey(true);
             ScopeKey.OnInvalidate += OnInvalidate;
-            ScopeKey.OnInvalidateRegistrars += OnInvalidate;
         }
 
         public virtual void Dispose() {
@@ -150,6 +150,11 @@ namespace Celeste.Mod.Procedurline {
                     scopeKeyValid = true;
                 }
             }
+        }
+
+        public override void RegisterScopes(DataScopeKey key) {
+            if(isDisposed) throw new ObjectDisposedException("InvalidatableSprite");
+            base.RegisterScopes(key);
         }
 
         private void OnInvalidate(IScopedInvalidatable inval) {

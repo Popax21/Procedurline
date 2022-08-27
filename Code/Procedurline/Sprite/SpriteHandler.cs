@@ -18,10 +18,13 @@ namespace Celeste.Mod.Procedurline {
         public readonly Sprite Sprite;
         public readonly string SpriteID;
         public readonly DataScopeKey ScopeKey;
-        public readonly bool OwnedByManager;
-        internal int numManagerRefs;
         private bool hasValidKey;
         private bool customSpriteRegistered;
+
+        public readonly bool OwnedByManager;
+        internal int numManagerRefs;
+
+        internal bool queueCacheReset;
 
         private bool didError = false;
         private Dictionary<string, Sprite.Animation> errorAnimations = new Dictionary<string, Sprite.Animation>(StringComparer.OrdinalIgnoreCase);
@@ -32,11 +35,10 @@ namespace Celeste.Mod.Procedurline {
         internal SpriteHandler(Sprite sprite, string spriteId, bool ownedByManager) {
             Sprite = sprite;
             SpriteID = spriteId;
-            ScopeKey = new DataScopeKey();
             OwnedByManager = ownedByManager;
 
+            ScopeKey = new DataScopeKey(true);
             ScopeKey.OnInvalidate += ScopeInvalidated;
-            ScopeKey.OnInvalidateRegistrars += ScopeInvalidated;
 
             //If the sprite is a custom sprite, register it
             if(sprite is CustomSprite customSprite) {
@@ -44,11 +46,8 @@ namespace Celeste.Mod.Procedurline {
                 customSpriteRegistered = true;
             }
 
-            //Reload current animation on the next frame
-            MainThreadHelper.GetForceQueue<object>(() => {
-                Sprite.ReloadAnimation();
-                return Sprite;
-            });
+            //Reload the current animation at the end of the frame
+            Celeste.Scene.OnEndOfFrame += () => Sprite.ReloadAnimation();
         }
 
         public void Dispose() {
@@ -182,7 +181,10 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
-        private void ScopeInvalidated(IScopedInvalidatable key) => ResetCache();
+        private void ScopeInvalidated(IScopedInvalidatable key) {
+            lock(LOCK) queueCacheReset = true;
+        }
+
         internal void AnimationReloaded(CustomSpriteAnimation anim) => Sprite.ReloadAnimation(anim.AnimationID);
 
         internal bool DrawDebug(Scene scene, Matrix mat, Dictionary<SpriteHandler, Rectangle> rects, Dictionary<SpriteHandler, Rectangle> nrects, bool layoutPass) {
