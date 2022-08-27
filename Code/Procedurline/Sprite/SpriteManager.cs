@@ -537,8 +537,8 @@ namespace Celeste.Mod.Procedurline {
             if(debugSpriteHandlers) DrawSpriteHandlerDebug(level, level.Camera.Matrix * Matrix.CreateScale(6));
         }
 
-        [Command("pl_dbgsprts", "Enable/Disable debug rendering of Procedurline sprite handlers")]
-        private static void DBGSPRTS() {
+        [Command("pl_dbgsprites", "Enable/Disable debug rendering of Procedurline sprite handlers")]
+        private static void DBGSPRITES() {
             ProcedurlineModule.SpriteManager.debugSpriteHandlers = !ProcedurlineModule.SpriteManager.debugSpriteHandlers;
         }
     }
