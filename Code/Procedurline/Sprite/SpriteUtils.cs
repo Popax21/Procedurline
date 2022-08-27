@@ -7,7 +7,6 @@ using Monocle;
 
 namespace Celeste.Mod.Procedurline {
     public static class SpriteUtils {
-
         private static readonly PropertyInfo Sprite_CurrentAnimationID = typeof(Sprite).GetProperty(nameof(Sprite.CurrentAnimationID));
         private static readonly PropertyInfo Sprite_CurrentAnimationFrame = typeof(Sprite).GetProperty(nameof(Sprite.CurrentAnimationFrame));
         private static readonly PropertyInfo Sprite_LastAnimationID = typeof(Sprite).GetProperty(nameof(Sprite.LastAnimationID));
