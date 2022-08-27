@@ -7,14 +7,14 @@ using System.Collections.Concurrent;
 
 namespace Celeste.Mod.Procedurline {
     /// <summary>
-    /// Represents something capable of registering the appropiate scopes of a target on a given key. In contrast to <see cref="IScopedTarget" />, which describes a target capable of registering just its own scopes on a given key, this interface allows for an external entity to do the scope assignment.
+    /// Represents something capable of registering the appropiate scopes of a target on a given key. In contrast to <see cref="IScopedObject" />, which describes a target capable of registering just its own scopes on a given key, this interface allows for an external entity to do the scope assignment.
     /// </summary>
     /// <seealso cref="DataScope" />
     /// <seealso cref="DataScopeKey" />
-    /// <seealso cref="IScopedTarget" />
+    /// <seealso cref="IScopedObject" />
     public interface IScopeRegistrar<T> {
         /// <summary>
-        /// Registers all scopes the target belongs to on the key
+        /// Registers all scopes the target belongs to on the given key
         /// </summary>
         void RegisterScopes(T target, DataScopeKey key);
     }
@@ -25,9 +25,9 @@ namespace Celeste.Mod.Procedurline {
     /// <seealso cref="DataScope" />
     /// <seealso cref="DataScopeKey" />
     /// <seealso cref="IScopeRegistrar{T}" />
-    public interface IScopedTarget {
+    public interface IScopedObject {
         /// <summary>
-        /// Registers all scopes this target belongs to on the key
+        /// Registers all scopes this object belongs to on the given key
         /// </summary>
         void RegisterScopes(DataScopeKey key);
     }
@@ -174,7 +174,7 @@ namespace Celeste.Mod.Procedurline {
     /// Represents a data scope key. For details, see <c cref="DataScope">DataScope</c>
     /// </summary>
     /// <seealso cref="DataScope" />
-    public class DataScopeKey : IDisposable, IScopedTarget, IScopedInvalidatable, IEquatable<DataScopeKey>, IReadOnlyCollection<DataScope> {
+    public class DataScopeKey : IDisposable, IScopedObject, IScopedInvalidatable, IEquatable<DataScopeKey>, IReadOnlyCollection<DataScope> {
         private const int HASH_MAGIC = unchecked((int) 0xcafec0de);
         private static long NEXT_ID = 0;
 

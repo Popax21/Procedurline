@@ -13,7 +13,7 @@ namespace Celeste.Mod.Procedurline {
     /// <seealso cref="CustomSpriteAnimation" />
     /// <seealso cref="DerivedSprite" />
     /// <seealso cref="MixerSprite" />
-    public abstract class CustomSprite : Sprite, IScopedTarget {
+    public abstract class CustomSprite : Sprite, IScopedObject {
         public readonly string SpriteID;
 
         protected CustomSprite(string spriteId, Atlas atlas, string path) : base(atlas, path) => SpriteID = spriteId;
