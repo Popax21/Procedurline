@@ -34,25 +34,6 @@ namespace Celeste.Mod.Procedurline {
     }
 
     /// <summary>
-    /// Implements an <see cref="IDataProcessor{T, I, D}" /> which simply invokes the delegates it's given.
-    /// </summary>
-    public class DelegateDataProcessor<T, I, D> : IDataProcessor<T, I, D> {
-        public delegate void RegisterScopesDelegate(T target, DataScopeKey key);
-        public delegate bool ProcessDataDelegate(T target, DataScopeKey key, I id, ref D data);
-
-        private RegisterScopesDelegate registerScopesDeleg;
-        private ProcessDataDelegate processDataDeleg;
-
-        public DelegateDataProcessor(RegisterScopesDelegate registerScopes = null, ProcessDataDelegate processData = null) {
-            registerScopesDeleg = registerScopes;
-            processDataDeleg = processData;
-        }
-
-        public void RegisterScopes(T target, DataScopeKey key) => registerScopesDeleg?.Invoke(target, key);
-        public bool ProcessData(T target, DataScopeKey key, I id, ref D data) => processDataDeleg?.Invoke(target, key, id, ref data) ?? false;
-    }
-
-    /// <summary>
     /// Implements an <see cref="IAsyncDataProcessor{T, I, D}" /> wrapping a synchronous <see cref="IDataProcessor{T, I, D}" />
     /// </summary>
     public class AsyncProcessorWrapper<T, I, D> : IAsyncDataProcessor<T, I, D> {
