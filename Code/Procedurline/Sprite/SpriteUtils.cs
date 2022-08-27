@@ -30,6 +30,8 @@ namespace Celeste.Mod.Procedurline {
         /// </summary>
         public static Sprite CloneInto(this Sprite sprite, Sprite target) => Sprite_CloneInto(sprite, target);
 
+        public static void SetCurrentAnimationID(this Sprite sprite, string val) => Sprite_CurrentAnimationID.SetValue(sprite, val);
+        public static void SetLastAnimationID(this Sprite sprite, string val) => Sprite_LastAnimationID.SetValue(sprite, val);
         public static void SetAnimationDict(this Sprite sprite, Dictionary<string, Sprite.Animation> val) => Sprite_animations.SetValue(sprite, val);
         public static Sprite.Animation GetCurrentAnimation(this Sprite sprite) => (Sprite.Animation) Sprite_currentAnimation.GetValue(sprite);
         public static float GetAnimationTimer(this Sprite sprite) => (float) Sprite_animationTimer.GetValue(sprite);
@@ -50,6 +52,24 @@ namespace Celeste.Mod.Procedurline {
         internal static Sprite UnsafeCloneSource, UnsafeCloneTarget;
 
         /// <summary>
+        /// Gets the specified original animation of the sprite, or null if it does not exist. This is a wrapper around <see cref="SpriteHandler.GetOriginalAnimation" />
+        /// </summary>
+        public static Sprite.Animation GetOriginalAnimation(this Sprite sprite, string animId) {
+            if(ProcedurlineModule.SpriteManager.GetSpriteHandler(sprite) is SpriteHandler handler) return handler.GetOriginalAnimation(animId);
+            if(sprite.Animations.TryGetValue(animId, out Sprite.Animation anim)) return anim;
+            return null;
+        }
+
+        /// <summary>
+        /// Gets the specified processed animation of the sprite, or null if it does not exist. This is a wrapper around <see cref="SpriteHandler.GetProcessedAnimation" />
+        /// </summary>
+        public static Sprite.Animation GetProcessedAnimation(this Sprite sprite, string animId) {
+            if(ProcedurlineModule.SpriteManager.GetSpriteHandler(sprite) is SpriteHandler handler) return handler.GetProcessedAnimation(animId);
+            if(sprite.Animations.TryGetValue(animId, out Sprite.Animation anim)) return anim;
+            return null;
+        }
+
+        /// <summary>
         /// Sets the sprite's current animation frame. This is a simple proxy of the vanilla <c>Sprite.SetFrame()</c> method.
         /// </summary>
         public static void SetFrame(this Sprite sprite, MTexture frame) => Sprite_SetFrame(sprite, frame);
@@ -60,17 +80,17 @@ namespace Celeste.Mod.Procedurline {
         public static void ReloadAnimation(this Sprite sprite, string animId = null) {
             //Get the currently playing animation
             string curAnim = sprite.CurrentAnimationID;
-            if(!sprite.Animating || string.IsNullOrEmpty(curAnim)) curAnim = sprite.LastAnimationID;
+            if(string.IsNullOrEmpty(curAnim)) curAnim = sprite.LastAnimationID;
             if(!string.IsNullOrEmpty(curAnim) && (animId == null || curAnim.Equals(animId, StringComparison.OrdinalIgnoreCase))) {
                 sprite.Texture = null;
 
                 //Get the new animation
-                if(!sprite.Animations.TryGetValue(curAnim, out Sprite.Animation anim)) {
+                if(!(sprite.GetProcessedAnimation(curAnim) is Sprite.Animation anim)) {
                     //The animation we were playing got deleted
                     Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Currently playing sprite animation '{curAnim}' [sprite '{ProcedurlineModule.SpriteManager?.GetSpriteID(sprite) ?? sprite.Path ?? "?????"}'] doesn't exit anymore after reload!");
                     sprite.Stop();
                 } else {
-                    if(sprite.Animating && !string.IsNullOrEmpty(sprite.CurrentAnimationID)) {
+                    if(!string.IsNullOrEmpty(sprite.CurrentAnimationID)) {
                         //Replace the internal animation reference
                         Sprite_currentAnimation.SetValue(sprite, anim);
 
@@ -86,44 +106,6 @@ namespace Celeste.Mod.Procedurline {
                         sprite.SetFrame(anim.Frames[anim.Frames.Length - 1]);
                     }
                 }
-            }
-        }
-
-        /// <summary>
-        /// Transfers this sprite's current animation ID and frame to the given target sprite. This can be used to seamlessly switch between two sprites with identical animations at runtime.
-        /// </summary>
-        public static void TransferAnimation(this Sprite sprite, Sprite target) {
-            //Get the current animation ID
-            string curAnim = sprite.CurrentAnimationID;
-            if(!sprite.Animating || string.IsNullOrEmpty(curAnim)) curAnim = sprite.LastAnimationID;
-
-            //Get the target's corresponding animation
-            if(!target.Animations.TryGetValue(curAnim, out Sprite.Animation anim)) {
-                Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Trying to transfer currently playing sprite animation '{curAnim}' [sprite '{ProcedurlineModule.SpriteManager?.GetSpriteID(sprite) ?? sprite.Path ?? "?????"}'] to target [sprite '{ProcedurlineModule.SpriteManager?.GetSpriteID(target) ?? target.Path ?? "?????"}'] which doesn't have it!");
-                target.Stop();
-                return;
-            }
-
-            if(sprite.Animating && !string.IsNullOrEmpty(sprite.CurrentAnimationID)) {
-                //Transfer over animation ID, frame index and animation timer
-                //Clamp the frame index to the new animation frame length
-                target.Play(curAnim, true, false);
-                target.SetAnimationFrame(Calc.Clamp(sprite.CurrentAnimationFrame, 0, anim.Frames.Length) - 1);
-                Sprite_animationTimer.SetValue(target, Sprite_animationTimer.GetValue(sprite));
-            } else if(!string.IsNullOrEmpty(curAnim)) {
-                //Check if there now is a Goto
-                if(anim.Goto != null) {
-                    target.Play(anim.Goto.Choose(), true, false);
-                } else {
-                    target.Stop();
-                    Sprite_CurrentAnimationFrame.SetValue(target, anim.Frames.Length - 1);
-                    Sprite_LastAnimationID.SetValue(target, curAnim);
-                    target.SetFrame(anim.Frames[anim.Frames.Length - 1]);
-                }
-            } else {
-                //No animation is currently playing
-                target.Stop();
-                target.Texture = null;
             }
         }
     }
