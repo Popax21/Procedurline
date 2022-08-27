@@ -18,7 +18,7 @@ namespace Celeste.Mod.Procedurline {
 
         [YamlIgnore]
         public int __MENU_BUTTONS { get; set; }
-        public void Create__MENU_BUTTONS(TextMenu menu, bool inGame) {
+        public void Create__MENU_BUTTONSEntry(TextMenu menu, bool inGame) {
             menu.Add(new TextMenu.Button("Evict Texture Cache").Pressed(() => {
                 ProcedurlineModule.TextureManager.CacheEvictor.EvictAll();
             }));
