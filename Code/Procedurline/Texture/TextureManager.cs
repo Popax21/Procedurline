@@ -212,8 +212,8 @@ namespace Celeste.Mod.Procedurline {
             Celeste.Commands.Log($"Maximum memory usage: {FormatBytes(ProcedurlineModule.TextureManager.CacheEvictor.MaxMemoryUsage)}");
         }
 
-        [Command("pl_evcttex", "Evicts all non-pinned data from the Procedurline texture cache")]
-        private static void ECVTTEX() {
+        [Command("pl_evicttex", "Evicts all non-pinned data from the Procedurline texture cache")]
+        private static void EVICTTEX() {
             long totalEvictedSize = ProcedurlineModule.TextureManager.CacheEvictor.EvictAll();
             Celeste.Commands.Log($"Evicted {totalEvictedSize} bytes [{totalEvictedSize / 1024}kB]");
         }
