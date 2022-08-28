@@ -17,7 +17,7 @@ namespace Celeste.Mod.Procedurline.Demo {
             //NOTE: In real world use cases, you would only do this once in a sort of global controller, not in every entity
             grayscaleMux = dispPool.Add(new AsyncDataProcessorMultiplexer<Sprite, string, Sprite.Animation>("pldemo-grayscale-mux",
                 null,
-                grayscaleCache = dispPool.Add(new SpriteAnimationCache(dispPool.Add(new TextureScope("pldemo-grayscale", ProcedurlineModule.TextureManager.StaticScope)),
+                grayscaleCache = dispPool.Add(new SpriteAnimationCache(dispPool.Add(new TextureScope("pldemo-grayscale", ProcedurlineModule.TextureManager.DerivedScope)),
                     new SpriteAnimationDataProcessor(GrayscaleDataProcessor, (s, k, _) => grayscaleCache.GetTextureScope(s, k))
                 ))
             ));

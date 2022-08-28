@@ -141,7 +141,7 @@ namespace Celeste.Mod.Procedurline {
 
         public DerivedSprite(string spriteId, Sprite origSprite, IAsyncDataProcessor<Sprite, string, SpriteAnimationData> processor, TextureScope texScope = null) : base(spriteId, null, string.Empty) {
             OriginalSprite = origSprite;
-            TextureScope = new TextureScope(spriteId, texScope ?? ProcedurlineModule.TextureManager.StaticScope);
+            TextureScope = texScope ?? new TextureScope(spriteId, ProcedurlineModule.TextureManager.DerivedScope);
             Processor = processor;
             InitWrapped(origSprite, (animId, anim) => new Animation(this, animId, anim));
         }

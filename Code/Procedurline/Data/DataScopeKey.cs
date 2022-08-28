@@ -297,25 +297,32 @@ namespace Celeste.Mod.Procedurline {
             lock(LOCK) {
                 if(scopes == null) return "<DISPOSED>";
 
-                StringBuilder builder = new StringBuilder();
-
-                int numAnonm = 0;
+                //Get a sorted list of all scope names
+                int numScopes = 0, totalScopeNameLenght = 0;
+                string[] scopeNames = new string[nonTransparentScopes.Count];
                 foreach(DataScope scope in nonTransparentScopes) {
                     if(scope.Name != null) {
-                        if(builder.Length > 0) builder.Append(delim);
-                        builder.Append(scope.Name);
-                    } else numAnonm++;
+                        scopeNames[numScopes++] = scope.Name;
+                        totalScopeNameLenght += scope.Name.Length;
+                    }
                 }
+                Array.Sort(scopeNames, 0, numScopes, StringComparer.OrdinalIgnoreCase);
 
-                if(numAnonm > 0) {
-                    if(builder.Length > 0) builder.Append(delim);
-                    builder.Append($"<#anon={numAnonm}>");
+                //Build string
+                StringBuilder builder = new StringBuilder(totalScopeNameLenght + delim.Length*numScopes);
+                for(int i = 0; i < scopeNames.Length; i++) {                
+                    if(i > 0) builder.Append(delim);
+                    builder.Append(scopeNames[i]);
+                }
+                if(numScopes < scopeNames.Length) {
+                    if(numScopes > 0) builder.Append(delim);
+                    builder.Append($"<#anon={scopeNames.Length - numScopes}>");
                 }
 
                 return builder.ToString();
             }
         }
-        public override string ToString() => $"{GetType().Name} [{GetScopeListString("; ")}]";
+        public override string ToString() => $"{GetType().Name} [{GetScopeListString(", ")}]";
 
         public IEnumerator<DataScope> GetEnumerator() => scopes.Keys.GetEnumerator();
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();

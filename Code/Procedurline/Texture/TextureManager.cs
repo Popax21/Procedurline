@@ -32,7 +32,7 @@ namespace Celeste.Mod.Procedurline {
         private LinkedList<TextureDataAction> dataActionQueue = new LinkedList<TextureDataAction>();
         public readonly TextureScope GlobalScope;
         public readonly TextureScope UnownedScope;
-        public readonly TextureScope StaticScope;
+        public readonly TextureScope DerivedScope;
 
         public TextureHandle EmptyTexture { get; internal set; }
         public TextureHandle ErrorTexture { get; internal set; }
@@ -49,7 +49,7 @@ namespace Celeste.Mod.Procedurline {
             //Create texture scopes
             GlobalScope = new TextureScope("GLOBAL", null);
             UnownedScope = new TextureScope("UNOWNED", GlobalScope);
-            StaticScope = new TextureScope("STATIC", GlobalScope);
+            DerivedScope = new TextureScope("DERIVED", GlobalScope);
 
             //Install hooks
             using(new DetourContext(ProcedurlineModule.HOOK_PRIO)) {
@@ -65,7 +65,7 @@ namespace Celeste.Mod.Procedurline {
 
             //Dispose texture scopes
             UnownedScope?.Dispose();
-            StaticScope?.Dispose();
+            DerivedScope?.Dispose();
             GlobalScope?.Dispose();
             textureHandles?.Clear();
 

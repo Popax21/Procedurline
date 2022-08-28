@@ -29,7 +29,7 @@ namespace Celeste.Mod.Procedurline {
                     lock(LOCK) {
                         if(IsDisposed) throw new ObjectDisposedException("ScopedCache");
                         if(texScope != null) return texScope;
-                        return texScope = new TextureScope($"{Key.SpriteID}:{Key.GetScopeListString("-")}", Cache.TextureScope);
+                        return texScope = new TextureScope($"{Key.SpriteID}#{Key.GetScopeListString(":")}", Cache.TextureScope);
                     }
                 }
             }

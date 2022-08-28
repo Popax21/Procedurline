@@ -10,6 +10,6 @@ namespace Celeste.Mod.Procedurline {
 
         public override bool Equals(DataScopeKey other) => other is SpriteScopeKey spriteKey && base.Equals(other) && SpriteID.Equals(spriteKey.SpriteID, StringComparison.OrdinalIgnoreCase);
         public override int GetHashCode() => unchecked(base.GetHashCode() * 31 + SpriteID.ToLower().GetHashCode());
-        public override string ToString() => $"SpriteScopeKey [{SpriteID}][{GetScopeListString("; ")}]";
+        public override string ToString() => $"SpriteScopeKey [{SpriteID}][{GetScopeListString(", ")}]";
     }
 }
