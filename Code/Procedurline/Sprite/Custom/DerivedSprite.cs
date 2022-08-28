@@ -69,7 +69,7 @@ namespace Celeste.Mod.Procedurline {
                         }
 
                         if(timer != null) {
-                            Logger.Log(ProcedurlineModule.Name, $"Finished processing DerivedSprite animation '{Sprite.SpriteID}' animation '{AnimationID}' (took {timer.ElapsedMilliseconds}ms)");
+                            Logger.Log(ProcedurlineModule.Name, $"Finished processing DerivedSprite '{Sprite.SpriteID}' animation '{AnimationID}' (took {timer.ElapsedMilliseconds}ms)");
                         }
 
                         //Replace animation

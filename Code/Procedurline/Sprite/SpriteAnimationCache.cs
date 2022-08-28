@@ -17,7 +17,7 @@ namespace Celeste.Mod.Procedurline {
             protected internal ScopedCache(SpriteAnimationCache cache, SpriteScopeKey key) : base(cache, key) {
                 Cache = cache;
                 Key = key;
-                TextureScope = new TextureScope(key.SpriteID, cache.TextureScope);
+                TextureScope = new TextureScope($"{key.SpriteID}:{key.GetScopeListString("-")}", cache.TextureScope);
             }
 
             public override void Dispose() {

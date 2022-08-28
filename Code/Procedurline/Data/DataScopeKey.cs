@@ -298,7 +298,7 @@ namespace Celeste.Mod.Procedurline {
 
                 if(numAnonm > 0) {
                     if(builder.Length > 0) builder.Append(delim);
-                    builder.Append($"<{numAnonm} anonymous>");
+                    builder.Append($"<#anon={numAnonm}>");
                 }
 
                 return builder.ToString();
