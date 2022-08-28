@@ -201,11 +201,11 @@ namespace Celeste.Mod.Procedurline {
             }
 
             //Start animation processing
-            anim.ProcessData();
+            ProcedurlineModule.SpriteManager.ProcessCustomAnimation(anim);
         }
 
         private void ScopeInvalidated(IScopedInvalidatable key) => ResetCache();
-        internal void AnimationReloaded(CustomSpriteAnimation anim) => Sprite.ReloadAnimation(anim.AnimationID);
+        internal void AnimationDataChange(DynamicSpriteAnimation anim) => Sprite.ReloadAnimation(((CustomSpriteAnimation) anim)?.AnimationID);
 
         internal bool DrawDebug(Scene scene, Matrix mat, Dictionary<SpriteHandler, Rectangle> rects, Dictionary<SpriteHandler, Rectangle> nrects, bool layoutPass) {
             //Build string to be drawn

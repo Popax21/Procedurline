@@ -75,7 +75,6 @@ namespace Celeste.Mod.Procedurline {
         /// </summary>
         public static void SetFrame(this Sprite sprite, MTexture frame) => Sprite_SetFrame(sprite, frame);
 
-        //FIXME Something's broken after F5 reload
         /// <summary>
         /// Reloads the sprite's current animation. This can be used when you changed some animation data on the fly, and want it to take effect immediatly.
         /// </summary>
@@ -119,6 +118,23 @@ namespace Celeste.Mod.Procedurline {
                         sprite.SetFrame(anim.Frames[frame]);
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// Obtains the animation's data in a safe manner. For dynamic sprite animations, this obtains the animation data in a thread safe way.
+        /// </summary>
+        public static void GetAnimationData(this Sprite.Animation anim, out float animDelay, out Chooser<string> animGoto, out MTexture[] animFrames) {
+            if(anim is DynamicSpriteAnimation threadedAnim) {
+                lock(threadedAnim.LOCK) {
+                    animDelay = threadedAnim.TDelay;
+                    animGoto = threadedAnim.TGoto;
+                    animFrames = threadedAnim.TFrames;
+                }
+            } else {
+                animDelay = anim.Delay;
+                animGoto = anim.Goto;
+                animFrames = anim.Frames;
             }
         }
     }

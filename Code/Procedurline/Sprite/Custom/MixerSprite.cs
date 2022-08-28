@@ -10,7 +10,6 @@ namespace Celeste.Mod.Procedurline {
     /// </summary>
     public sealed class MixerSprite : InvalidatableSprite {
         private new sealed class Animation : InvalidatableSprite.Animation, IProxySpriteAnimation {
-            private readonly object LOCK = new object();
             public new readonly MixerSprite Sprite;
 
             private Task mixerTask;
@@ -48,18 +47,16 @@ namespace Celeste.Mod.Procedurline {
                 if(anim is CustomSpriteAnimation customAnim) await customAnim.ProcessData();
 
                 //Replace the animation
-                await ProcedurlineModule.GlobalManager.MainThreadTaskFactory.StartNew(() => {
-                    lock(LOCK) {
-                        lock(Sprite.LOCK) {
-                            //Mark the animation as valid
-                            if(!MarkValid(valToken)) return;
+                lock(LOCK) {
+                    lock(Sprite.LOCK) {
+                        //Mark the animation as valid
+                        if(!MarkValid(valToken)) return;
 
-                            //Replace the animation
-                            ReplaceData(anim);
-                            mixedAnim = anim;
-                        }
+                        //Replace the animation
+                        ReplaceData(anim);
+                        mixedAnim = anim;
                     }
-                });
+                }
             }
 
             public Sprite.Animation ProxiedAnimation {

@@ -51,59 +51,32 @@ namespace Celeste.Mod.Procedurline {
 
     /// <summary>
     /// Represents a custom sprite animation. Custom sprite animations have the capability to hook into Procedurline's sprite processing system, by being able to process data dynamically before it's used.
-    /// Note that custom sprite animations by themselves <b>do not allow one to dynamically change data after it has finished processing</b>. If this is needed, you need to implement a proper scope invalidation mechanism using <see cref="CustomSprite.RegisterScopes" />.
-    /// <b>All updates to animation data must happen on the main thread!</b>
+    /// For more details, see <see cref="DynamicSpriteAnimation"/>.
     /// </summary>
     /// <seealso cref="CustomSprite" />
-    public abstract class CustomSpriteAnimation : Sprite.Animation {
+    /// <seealso cref="DynamicSpriteAnimation" />
+    public abstract class CustomSpriteAnimation : DynamicSpriteAnimation {
         public readonly string AnimationID;
-        private MTexture[] DummyFrames;
 
-        protected CustomSpriteAnimation(string animId) {
-            AnimationID = animId;
-
-            Delay = 0f;
-            Goto = null;
-            Frames = DummyFrames = new MTexture[] { ProcedurlineModule.TextureManager.EmptyTexture.MTexture };
-        }
+        protected CustomSpriteAnimation(string animId) => AnimationID = animId;
 
         /// <summary>
         /// Called when a <see cref="SpriteHandler" /> starts using this animation. Can be called multiple times with different <see cref="SpriteHandler" />s.
         /// </summary>
-        public virtual void RegisterHandler(SpriteHandler handler) => OnReload += handler.AnimationReloaded;
+        public virtual void RegisterHandler(SpriteHandler handler) => OnNonThreadedDataChange += handler.AnimationDataChange;
 
         /// <summary>
         /// Called when a <see cref="SpriteHandler" /> stops using this animation. Can be called multiple times with different <see cref="SpriteHandler" />s.
         /// </summary>
-        public virtual void UnregisterHandler(SpriteHandler handler) => OnReload -= handler.AnimationReloaded;
+        public virtual void UnregisterHandler(SpriteHandler handler) => OnNonThreadedDataChange -= handler.AnimationDataChange;
 
         /// <summary>
         /// Called before this animation's data is used, either by <see cref="SpriteManager.GetAnimationData" /> or by <see cref="SpriteHandler" />s.
         /// <see cref="SpriteHandler" />s will still play the current animation data while this task is running if asynchronous static processing is enabled in the settings, if you want to instead always block the game until your processing is complete call <see cref="GlobalManager.BlockEngineOnTask" />.
-        /// Once you have new animation data, you can either use the <see cref="ReplaceData" /> helper method to swap it with your current animation data, or you can replace it yourself <b>on the main thread</b> and then call <see cref="Reload" />.
-        /// If your animation data can become invalidated some time after this task completes, you <b>HAVE</b> to utilize the <see cref="CustomSprite.RegisterScopes" /> mechanism to notify potential users of the invalidation. <b>DO NOT</b> call <see cref="Reload" /> to specifically accomplish this.
+        /// Once you have new animation data, you can either use the <see cref="DynamicSpriteAnimation.ReplaceData" /> helper method to swap it with your current animation data, or you can replace it yourself and then call <see cref="DynamicSpriteAnimation.QueueSyncFromThreaded" />.
+        /// If your animation data can become invalidated some time after this task completes, you <b>HAVE</b> to utilize the <see cref="CustomSprite.RegisterScopes" /> mechanism to notify potential users of the invalidation.
         /// <b>NOTE:</b> if you want manually kickstart processing of a custom sprite's animation, because Procedurline won't do so yourself, you <b>HAVE TO</b> call <see cref="SpriteManager.ProcessCustomAnimation" /> instead of the method directly. <b>Only call this method directly if you are yourself inside a custom sprite animation processing task!</b> 
         /// </summary>
         public abstract Task ProcessData();
-
-        /// <summary>
-        /// Reloads the animation. This causes all sprites using it to reload the new animation data (assuming they have an attached <see cref="SpriteHandler" />), and invokes <see cref="OnReload" />.
-        /// <b>DO NOT USE THIS MECHANISM TO HANDLE INVALIDATION!</b> This will not work properly, as <b>dynamic sprite processing does not have any reload handlers</b>. Use <see cref="CustomSprite.RegisterScopes" /> if your processed data can change.
-        /// </summary>
-        public virtual void Reload() => MainThreadHelper.Do(() => OnReload?.Invoke(this));
-
-        /// <summary>
-        /// Helper method which replaces this animation's data, and then reloads the animation.
-        /// </summary>
-        protected void ReplaceData(Sprite.Animation anim) {
-            MainThreadHelper.Do(() => {
-                Delay = anim?.Delay ?? 0f;
-                Goto = anim?.Goto ?? null;
-                Frames = anim?.Frames ?? DummyFrames;
-                Reload();
-            });
-        }
-
-        public event Action<CustomSpriteAnimation> OnReload;
     }
 }

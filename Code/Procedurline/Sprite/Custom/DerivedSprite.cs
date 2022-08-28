@@ -12,7 +12,6 @@ namespace Celeste.Mod.Procedurline {
     /// </summary>
     public sealed class DerivedSprite : InvalidatableSprite {
         private new sealed class Animation : InvalidatableSprite.Animation, IDisposable {
-            private readonly object LOCK = new object();
             public new readonly DerivedSprite Sprite;
             public readonly Sprite.Animation OriginalAnimation;
 
@@ -74,7 +73,7 @@ namespace Celeste.Mod.Procedurline {
                         }
 
                         //Replace animation
-                        await ReplaceAnimation(procAnim, texHandleRef.Data, valToken, true);
+                        ReplaceAnimation(procAnim, texHandleRef.Data, valToken, true);
                     }
                 } catch(Exception e) {
                     texHandleRef?.Data?.Dispose();
@@ -88,28 +87,26 @@ namespace Celeste.Mod.Procedurline {
                     lock(LOCK) errorAnim ??= CreateErrorAnimation();
 
                     //Replace with error animation
-                    await ReplaceAnimation(errorAnim, null, valToken, true);
+                    ReplaceAnimation(errorAnim, null, valToken, true);
 
                     throw;
                 }
             }
 
-            private Task ReplaceAnimation(Sprite.Animation anim, TextureHandle tex, ulong valToken, bool markValid) {
-                return ProcedurlineModule.GlobalManager.MainThreadTaskFactory.StartNew(() => {
-                    lock(LOCK) {
-                        lock(Sprite.LOCK) {
-                            //Try to mark the animation is valid, or check if the token still is valid
-                            if(markValid ? !MarkValid(valToken) : !IsTokenValid(valToken)) return;
+            private void ReplaceAnimation(Sprite.Animation anim, TextureHandle tex, ulong valToken, bool markValid) {
+                lock(LOCK) {
+                    lock(Sprite.LOCK) {
+                        //Try to mark the animation is valid, or check if the token still is valid
+                        if(markValid ? !MarkValid(valToken) : !IsTokenValid(valToken)) return;
 
-                            //Replace animation data
-                            ReplaceData(anim);
+                        //Replace animation data
+                        ReplaceData(anim);
 
-                            //Set texture handle
-                            texHandle?.Dispose();
-                            texHandle = tex;
-                        }
+                        //Set texture handle
+                        texHandle?.Dispose();
+                        texHandle = tex;
                     }
-                });
+                }
             }
 
             private Sprite.Animation CreateErrorAnimation() {

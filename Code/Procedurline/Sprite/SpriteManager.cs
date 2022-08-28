@@ -178,30 +178,21 @@ namespace Celeste.Mod.Procedurline {
         public async Task<SpriteAnimationData> GetAnimationData(Sprite.Animation anim, CancellationToken token = default) {
             token.ThrowIfCancellationRequested();
 
-            //Fetch the sprite animation values
-            float animDelay;
-            Chooser<string> animGoto;
-            MTexture[] animFrames;
-
             if(anim is CustomSpriteAnimation customAnim) {
                 //Wait for the animation to finish updating
                 try {
                     await ProcessCustomAnimation(customAnim).OrCancelled(token);
                 } catch(Exception e) {
                     //Custom animation processing exceptions aren't our responsibility
-                    Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Encountered an error processing sprite animation data for custom sprite animation '{customAnim.AnimationID}': {e}");
+                    Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Encountered an error processing sprite animation data for CustomSpriteAnimation '{customAnim.AnimationID}': {e}");
                 }
-
-                //We have to get the animation's data on the main thread
-                Tuple<float, Chooser<string>, MTexture[]> data = await ProcedurlineModule.GlobalManager.MainThreadTaskFactory.StartNew(() => new Tuple<float, Chooser<string>, MTexture[]>(customAnim.Delay, customAnim.Goto, customAnim.Frames));
-                animDelay = data.Item1;
-                animGoto = data.Item2;
-                animFrames = data.Item3;
-            } else {
-                animDelay = anim.Delay;
-                animGoto = anim.Goto;
-                animFrames = anim.Frames;
             }
+
+            //Fetch the sprite animation values
+            float animDelay;
+            Chooser<string> animGoto;
+            MTexture[] animFrames;
+            anim.GetAnimationData(out animDelay, out animGoto, out animFrames);
 
             //Create animation data
             SpriteAnimationData animData;
