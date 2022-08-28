@@ -48,7 +48,9 @@ namespace Celeste.Mod.Procedurline {
         protected virtual Sprite ProcessSprite(Sprite origSprite) {
             if(!SPRITE_CACHE.TryGetValue(spriteColor, out Sprite recSprite)) {
                 Matrix colMat = ColorUtils.CalculateRecolorMatrix(RedColor, spriteColor);
-                SPRITE_CACHE[spriteColor] = recSprite = new DerivedSprite($"customBooster-#{spriteColor.PackedValue:x8}", origSprite, new SpriteColorMatrixProcessor(colMat, 0.05f, 0.05f).WrapAsync<Sprite, string, SpriteAnimationData>());
+                SPRITE_CACHE[spriteColor] = recSprite = ProcedurlineModule.GlobalDisposablePool.Add(
+                    new DerivedSprite($"customBooster-#{spriteColor.PackedValue:x8}", origSprite, new SpriteColorMatrixProcessor(colMat, 0.05f, 0.05f).WrapAsync<Sprite, string, SpriteAnimationData>())
+                );
             }
             return recSprite.Clone();
         }

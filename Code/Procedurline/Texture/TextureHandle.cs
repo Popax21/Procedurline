@@ -74,7 +74,7 @@ namespace Celeste.Mod.Procedurline {
 
         private VirtualTexture vtex;
         private MTexture mtex;
-        private bool ownsTex;
+        public readonly bool OwnsTexture;
 
         internal LinkedListNode<TextureHandle> cacheNode;
         private int cachePinCount;
@@ -98,12 +98,13 @@ namespace Celeste.Mod.Procedurline {
                         if(IsDisposed) return;
                         vtex = VirtualContent.CreateTexture($"/PLHANDLE{Path}", width, height, col);
                         mtex = new MTexture(vtex);
+                        ShortCircuitTextureLoad();
 
                         //Add to textures dictionary
                         lock(ProcedurlineModule.TextureManager.textureHandles) ProcedurlineModule.TextureManager.textureHandles[vtex] = this;
                     }
                 });
-                ownsTex = true;
+                OwnsTexture = true;
 
                 //Create the data cache
                 dataCache = new TextureData(width, height);
@@ -122,7 +123,7 @@ namespace Celeste.Mod.Procedurline {
 
                 vtex = tex;
                 mtex = new MTexture(vtex);
-                ownsTex = false;
+                OwnsTexture = false;
 
                 //Create the data cache
                 dataCache = new TextureData(Width, Height);
@@ -150,7 +151,7 @@ namespace Celeste.Mod.Procedurline {
                     lock(ProcedurlineModule.TextureManager.textureHandles) ProcedurlineModule.TextureManager.textureHandles.TryRemove(vtex, out _);
 
                     //Dispose the texture
-                    if(ownsTex) MainThreadHelper.Do(vtex.Dispose);
+                    if(OwnsTexture) MainThreadHelper.Do(vtex.Dispose);
                     vtex = null;
                 }
 

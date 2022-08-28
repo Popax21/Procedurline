@@ -38,7 +38,7 @@ namespace Celeste.Mod.Procedurline.Demo {
         }
 
         protected override Sprite ProcessSprite(Sprite origSprite) {
-            if(SPRITE == null) SPRITE = new DerivedSprite("pldemo-booster", origSprite, GrayscaleDataProcessor, grayscaleCache.TextureScope);
+            if(SPRITE == null) SPRITE = ProcedurlineModule.GlobalDisposablePool.Add(new DerivedSprite("pldemo-booster", origSprite, GrayscaleDataProcessor));
             return SPRITE.Clone();
         }
 

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Linq;
 using System.Reflection;
 using Microsoft.Xna.Framework;
 
@@ -114,7 +113,9 @@ namespace Celeste.Mod.Procedurline {
                 TextureManager.ErrorTexture.SetTextureData(errorData).ContinueWith(_ => errorData.Dispose());
             }
         }
-        
+
+        public static DisposablePool GlobalDisposablePool => Instance?.dispPool;
+
         public static GlobalManager GlobalManager => Instance?.globalManager;
         public static TextureManager TextureManager => Instance?.texManager;
         public static SpriteManager SpriteManager => Instance?.spriteManager;

@@ -46,7 +46,9 @@ namespace Celeste.Mod.Procedurline {
         protected virtual Sprite ProcessSprite(Sprite origSprite) {
             if(!SPRITE_CACHE.TryGetValue(new Tuple<Color, bool>(spriteColor, DoubleRefill), out Sprite recSprite)) {
                 Matrix colMat = ColorUtils.CalculateRecolorMatrix(DoubleRefill ? DoubleColor : OnceColor, spriteColor);
-                SPRITE_CACHE[new Tuple<Color, bool>(spriteColor, DoubleRefill)] = recSprite = new DerivedSprite($"custom{(DoubleRefill ? "Double" : string.Empty)}Refill-#{spriteColor.PackedValue:x8}", origSprite, new SpriteColorMatrixProcessor(colMat, 0.05f, 0.05f).WrapAsync<Sprite, string, SpriteAnimationData>());
+                SPRITE_CACHE[new Tuple<Color, bool>(spriteColor, DoubleRefill)] = recSprite = ProcedurlineModule.GlobalDisposablePool.Add(
+                    new DerivedSprite($"custom{(DoubleRefill ? "Double" : string.Empty)}Refill-#{spriteColor.PackedValue:x8}", origSprite, new SpriteColorMatrixProcessor(colMat, 0.05f, 0.05f).WrapAsync<Sprite, string, SpriteAnimationData>())
+                );
             }
             return recSprite.Clone();
         }

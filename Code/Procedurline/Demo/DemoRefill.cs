@@ -18,12 +18,12 @@ namespace Celeste.Mod.Procedurline.Demo {
         protected override Sprite ProcessSprite(Sprite origSprite) {
             if(recoloredSprites == null) {
                 //Recolor sprites
-                TextureScope texScope = dispPool.Add(new TextureScope("pldemo-refill", ProcedurlineModule.TextureManager.StaticScope));
+                TextureScope texScope = ProcedurlineModule.GlobalDisposablePool.Add(new TextureScope("pldemo-refill", ProcedurlineModule.TextureManager.StaticScope));
                 recoloredSprites = new Sprite[colors.Length];
                 for(int i = 0; i < colors.Length; i++) {
-                    recoloredSprites[i] = new DerivedSprite($"pldemo-refill-#{colors[i].PackedValue:x8}", origSprite,
+                    recoloredSprites[i] = ProcedurlineModule.GlobalDisposablePool.Add(new DerivedSprite($"pldemo-refill-#{colors[i].PackedValue:x8}", origSprite,
                         new SpriteColorMatrixProcessor(ColorUtils.CalculateRecolorMatrix(OnceColor, colors[i]), 0.05f, 0.05f).WrapAsync<Sprite, string, SpriteAnimationData>(),
-                    texScope);
+                    texScope));
                 }
             }
 

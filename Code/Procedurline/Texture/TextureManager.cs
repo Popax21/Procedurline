@@ -7,6 +7,7 @@ using System.Collections.Concurrent;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
+using MonoMod.RuntimeDetour;
 using Monocle;
 
 namespace Celeste.Mod.Procedurline {
@@ -48,9 +49,19 @@ namespace Celeste.Mod.Procedurline {
             GlobalScope = new TextureScope("GLOBAL", null);
             UnownedScope = new TextureScope("UNOWNED", GlobalScope);
             StaticScope = new TextureScope("STATIC", GlobalScope);
+
+            //Install hooks
+            using(new DetourContext(ProcedurlineModule.HOOK_PRIO)) {
+                On.Monocle.VirtualTexture.Reload += VTexReloadHook;
+                On.Monocle.VirtualTexture.Unload += VTexUnloadHook;
+            }
         }
 
         protected override void Dispose(bool disposing) {
+            //Remove hooks
+            On.Monocle.VirtualTexture.Reload -= VTexReloadHook;
+            On.Monocle.VirtualTexture.Unload -= VTexUnloadHook;
+
             //Dispose texture scopes
             UnownedScope?.Dispose();
             StaticScope?.Dispose();
@@ -161,6 +172,24 @@ namespace Celeste.Mod.Procedurline {
                 action = TextureDataAction.Action.UPLOAD,
             });
             return taskSrc.Task;
+        }
+
+        private void VTexReloadHook(On.Monocle.VirtualTexture.orig_Reload orig, VirtualTexture tex) {
+            //Block reloading of textures which are owned by Procedurline
+            lock(textureHandles) {
+                if(textureHandles.TryGetValue(tex, out TextureHandle handle) && handle.OwnsTexture) return;
+            }
+
+            orig(tex);
+        }
+
+        private void VTexUnloadHook(On.Monocle.VirtualTexture.orig_Unload orig, VirtualTexture tex) {
+            //Block unloading of textures which are owned by Procedurline
+            lock(textureHandles) {
+                if(textureHandles.TryGetValue(tex, out TextureHandle handle) && handle.OwnsTexture) return;
+            }
+
+            orig(tex);
         }
 
         [Command("pl_texscopes", "Displays all Procedurline texture scopes")]
