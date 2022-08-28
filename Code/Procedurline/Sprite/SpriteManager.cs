@@ -26,7 +26,7 @@ namespace Celeste.Mod.Procedurline {
 
             public DataProcessorWrapper(SpriteManager manager) {
                 Manager = manager;
-                Processor = new SpriteAnimationDataProcessor(manager.DynamicAnimationProcessor, (_, k, _) => ((SpriteAnimationCache.ScopedCache) Manager.DynamicAnimationCache.GetScopedData(k)).TextureScope);
+                Processor = new SpriteAnimationDataProcessor(manager.DynamicAnimationProcessor, (_, k, _) => Manager.DynamicAnimationCache.GetScopedData(k).TextureScope);
             }
 
             public void RegisterScopes(Sprite target, DataScopeKey key) => Processor.RegisterScopes(target, key);

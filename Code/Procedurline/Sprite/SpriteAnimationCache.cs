@@ -32,6 +32,13 @@ namespace Celeste.Mod.Procedurline {
             TextureScope = scope;
         }
 
+
+        /// <inheritdoc cref="DataCache{T,D}.GetScopedData(T)" />
+        public new ScopedCache GetScopedData(Sprite target) => (ScopedCache) base.GetScopedData(target);
+
+        /// <inheritdoc cref="DataCache{T,D}.GetScopedData(DataScopeKey)" />
+        public new ScopedCache GetScopedData(DataScopeKey key) => (ScopedCache) base.GetScopedData(key);
+
         protected override DataScopeKey CreateKey(Sprite target) {
             string id = ProcedurlineModule.SpriteManager.GetSpriteID(target);
             if(id == null) return null;

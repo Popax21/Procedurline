@@ -35,6 +35,15 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
+        /// Checks if the cache has cached data for the given key
+        /// </summary>
+        public bool Contains(DataScopeKey key) {
+            lock(key.LOCK) lock(LOCK) {
+                return cache.ContainsKey(key);
+            }
+        }
+
+        /// <summary>
         /// Retrieves the associated scoped data for the given target.
         /// This generates a temporary cache key for the target and tries to look up scoped data in the cache.
         /// If there is no scoped data chached for the target's key, new data is created and kept alive until its key gets invalidated.
@@ -73,15 +82,6 @@ namespace Celeste.Mod.Procedurline {
                 }
             } finally {
                 key?.Dispose();
-            }
-        }
-
-        /// <summary>
-        /// Checks if the cache has cached data for the given key
-        /// </summary>
-        public bool Contains(DataScopeKey key) {
-            lock(key.LOCK) lock(LOCK) {
-                return cache.ContainsKey(key);
             }
         }
 
