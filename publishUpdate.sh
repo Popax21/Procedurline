@@ -19,32 +19,32 @@ then
     xdg-open $changelog
     echo "Enter changelog (your default editor should have opened)"
     read -p "Press enter when done..."
-
-    #Get confirmation before publishing
-    echo
-    echo "Are you sure you want to publish version $1?"
-    echo "Changelog:"
-    cat $changelog
-    echo
-
-    select conf in "Yes" "No"; do
-        case $conf in
-            Yes ) break;;
-            * ) echo "Aborting..."; exit;;
-        esac
-    done
-
-    #Add changelog to CHANGELOG.txt
-    changelog2="$(mktemp)"
-    echo "---------- CHANGELOG VERSION $1 ----------" >> $changelog2
-    cat $changelog >> $changelog2
-    echo >> $changelog2
-    echo >> $changelog2
-    cat CHANGELOG.txt >> $changelog2
-    mv -f $changelog2 CHANGELOG.txt
 else
     changelog="$2"
 fi
+
+#Get confirmation before publishing
+echo
+echo "Are you sure you want to publish version $1?"
+echo "Changelog:"
+cat $changelog
+echo
+
+select conf in "Yes" "No"; do
+    case $conf in
+        Yes ) break;;
+        * ) echo "Aborting..."; exit;;
+    esac
+done
+
+#Add changelog to CHANGELOG.txt
+changelog2="$(mktemp)"
+echo "---------- CHANGELOG VERSION $1 ----------" >> $changelog2
+cat $changelog >> $changelog2
+echo >> $changelog2
+echo >> $changelog2
+cat CHANGELOG.txt >> $changelog2
+mv -f $changelog2 CHANGELOG.txt
 
 #Create release on GitHub
 commit="$(git log -n 1 --pretty=format:%H main)"
