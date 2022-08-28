@@ -26,7 +26,7 @@ namespace Celeste.Mod.Procedurline {
 
             public DataProcessorWrapper(SpriteManager manager) {
                 Manager = manager;
-                Processor = new SpriteAnimationDataProcessor(manager.DynamicAnimationProcessor, (_, k, _) => Manager.DynamicAnimationCache.GetScopedData(k).TextureScope);
+                Processor = new SpriteAnimationDataProcessor(manager.DynamicAnimationProcessor, (s, k, _) => Manager.DynamicAnimationCache.GetTextureScope(s, k));
             }
 
             public void RegisterScopes(Sprite target, DataScopeKey key) => Processor.RegisterScopes(target, key);
@@ -77,10 +77,8 @@ namespace Celeste.Mod.Procedurline {
             DynamicAnimationCache = new SpriteAnimationCache(new TextureScope("DYNANIMCACHE", ProcedurlineModule.TextureManager.GlobalScope), new DataProcessorWrapper(this));
 
             DynamicAnimationMixer.AddProcessor(0, DynamicAnimationCache);
-            DynamicAnimationMixer.AddProcessor(int.MinValue, new DelegateDataProcessor<Sprite, string, Sprite.Animation>(registerScopes: (sprite, key) => {
-                RegisterSpriteScopes(sprite, key);
-                ProcedurlineModule.DynamicScope.RegisterKey(key);
-            }).WrapAsync());
+            DynamicAnimationMixer.AddProcessor(int.MinValue, new DelegateDataProcessor<Sprite, string, Sprite.Animation>(registerScopes: RegisterSpriteScopes).WrapAsync());
+            DynamicAnimationProcessor.AddProcessor(int.MinValue, new DelegateDataProcessor<Sprite, string, SpriteAnimationData>(registerScopes: (_, k) => ProcedurlineModule.DynamicScope.RegisterKey(k)).WrapAsync());
 
             //Install hooks
             using(new DetourContext(ProcedurlineModule.HOOK_PRIO)) {
@@ -160,9 +158,14 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
-        /// Registers the sprite's default scopes on the key.
+        /// Registers the sprite's default scopes on the key
         /// </summary>
-        public void RegisterSpriteScopes(Sprite sprite, DataScopeKey key, bool noCustom = false) {
+        public void RegisterSpriteScopes(Sprite sprite, DataScopeKey key) => RegisterSpriteScopes(sprite, key, false);
+
+        /// <summary>
+        /// Registers the sprite's default scopes on the key. Optionally does not register any custom sprite scopes.
+        /// </summary>
+        public void RegisterSpriteScopes(Sprite sprite, DataScopeKey key, bool noCustom) {
             ProcedurlineModule.GlobalScope.RegisterKey(key);
             ProcedurlineModule.SpriteScope.RegisterKey(key);
             if(sprite is PlayerSprite || sprite.Entity is Player) ProcedurlineModule.PlayerScope.RegisterKey(key);

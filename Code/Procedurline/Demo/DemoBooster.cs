@@ -18,7 +18,7 @@ namespace Celeste.Mod.Procedurline.Demo {
             grayscaleMux = dispPool.Add(new AsyncDataProcessorMultiplexer<Sprite, string, Sprite.Animation>("pldemo-grayscale-mux",
                 null,
                 grayscaleCache = dispPool.Add(new SpriteAnimationCache(dispPool.Add(new TextureScope("pldemo-grayscale", ProcedurlineModule.TextureManager.StaticScope)),
-                    new SpriteAnimationDataProcessor(GrayscaleDataProcessor, (_, k, _) => grayscaleCache.GetScopedData(k).TextureScope)
+                    new SpriteAnimationDataProcessor(GrayscaleDataProcessor, (s, k, _) => grayscaleCache.GetTextureScope(s, k))
                 ))
             ));
 

@@ -37,7 +37,7 @@ namespace Celeste.Mod.Procedurline {
 
                 //Dispose data scopes
                 MuxScope.Dispose();
-                for(int i = 0; i < IndexScopes.Length; i++) IndexScopes[i]?.Dispose();
+                for(int i = 0; i < IndexScopes.Length; i++) IndexScopes[i].Dispose();
             }
         }
 

@@ -11,7 +11,7 @@ namespace Celeste.Mod.Procedurline {
     /// It allows for queries for per-target data which can be shared between targets belonging to the same set of scopes (= having identical keys)
     /// The cache additionally keeps track of scope validity, and automatically disposed the scoped data if the key it belongs to gets invalidated.
     /// </summary>
-    public abstract class DataCache<T, D> : IScopedInvalidatable, IDisposable where D : class, IDisposable {
+    public abstract class DataCache<T, D> : IDisposable where D : class, IDisposable {
         public readonly object LOCK = new object();
         public readonly IScopeRegistrar<T> ScopeRegistrar;
 
@@ -46,25 +46,30 @@ namespace Celeste.Mod.Procedurline {
         /// <summary>
         /// Retrieves the associated scoped data for the given target.
         /// This generates a temporary cache key for the target and tries to look up scoped data in the cache.
-        /// If there is no scoped data chached for the target's key, new data is created and kept alive until its key gets invalidated.
+        /// If there is no scoped data chached for the target's key, new data is created and kept alive until its key gets invalidated, unless <paramref name="noCreateNew" /> is <c>true</c>.
         /// </summary>
         /// <returns>
         /// <c>null</c> if the target shouldn't have any associated scoped data.
         /// </returns>
-        public D GetScopedData(T target) {
+        public D GetScopedData(T target, DataScopeKey tkey = null, bool noCreateNew = false) {
             DataScopeKey key = CreateKey(target);
             if(key == null) return null;
         
             try {
                 lock(key.LOCK) {
                     //Register the target's scopes on the cache key
-                    retryRegister:;
+                    retry:;
+    
+                    if(!tkey?.IsValid ?? false) throw new ArgumentException("Target key can't be invalid!");
+                    tkey?.RegisterScopes(key);
+
                     ScopeRegistrar.RegisterScopes(target, key);
+
                     lock(key.VALIDITY_LOCK) {
                         if(!key.IsValid) {
                             //This could happen if the key was registered on a scope which was then invalidated
                             key.Reset();
-                            goto retryRegister;
+                            goto retry;
                         }
 
                         //Get or create the corresponding scoped data
@@ -85,53 +90,6 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
-        /// <summary>
-        /// Retrieves the associated scoped data for the given scope key.
-        /// If there is no scoped data chached for the key, no new data is created, as the key alone doesn't hold enough information to create it.
-        /// </summary>
-        /// <returns>
-        /// <c>null</c> if the key doesn't have any cached data.
-        /// </returns>
-        public D GetScopedData(DataScopeKey key) {
-            lock(key.LOCK) {
-                //Check if there is cached data
-                lock(LOCK) if(cache.TryGetValue(key, out D data)) return data;
-                return null;
-            }
-        }
-
-        public void Invalidate() {
-            //Clear the cache
-            lock(LOCK) cache.Clear();
-            OnInvalidate?.Invoke(this);
-        }
-
-        /// <summary>
-        /// Invalidates just the specified key's scoped data in the cache. Invokes <see cref="OnInvalidateKey"/> if cached data was invalidated.
-        /// </summary>
-        /// <returns>
-        /// <c>true</c> if the cache contained cached data for the given key
-        /// </returns>
-        public bool Invalidate(DataScopeKey key) {
-            bool didInvalidate = false;
-            lock(key.LOCK) lock(LOCK) {
-                foreach(DataScopeKey k in cache.Keys) {
-                    if(k.Equals(key)) {
-                        k.Invalidate();
-                        didInvalidate = true;
-                        break;
-                    }
-                }
-            }
-
-            if(didInvalidate) OnInvalidateKey?.Invoke(this, key);
-            return didInvalidate;
-        }
-
-        public void InvalidateRegistrars() {
-            OnInvalidateRegistrars?.Invoke(this);
-        }
-
         private void KeyInvalidated(IScopedInvalidatable inval) {
             DataScopeKey key = (DataScopeKey) inval;
 
@@ -141,7 +99,6 @@ namespace Celeste.Mod.Procedurline {
             data?.Dispose();
 
             key.Dispose();
-            OnInvalidateKey?.Invoke(this, key);
         }
 
         /// <summary>
@@ -163,10 +120,6 @@ namespace Celeste.Mod.Procedurline {
                 lock(LOCK) return cache == null;
             }
         }
-
-        public event Action<IScopedInvalidatable> OnInvalidate;
-        public event Action<DataCache<T,D>, DataScopeKey> OnInvalidateKey;
-        public event Action<IScopedInvalidatable> OnInvalidateRegistrars;
     }
 
     /// <summary>
@@ -258,10 +211,7 @@ namespace Celeste.Mod.Procedurline {
         public virtual bool ProcessData(T target, DataScopeKey key, I id, ref D data) {
             //Get the target's scoped cache
             retry:;
-            ScopedCache scache = null;
-            if(key != null) scache ??= GetScopedData(key);
-            scache ??= GetScopedData(target);
-
+            ScopedCache scache = GetScopedData(target, key);
             if(scache == null) return false;
 
             lock(scache.LOCK) {
@@ -390,10 +340,8 @@ namespace Celeste.Mod.Procedurline {
         public virtual Task<bool> ProcessDataAsync(T target, DataScopeKey key, I id, AsyncRef<D> data, CancellationToken token = default) {
             //Get the target's scoped cache
             retry:;
-            ScopedCache scache = null;
-            if(key != null) scache ??= GetScopedData(key);
-            scache ??= GetScopedData(target);
-
+            token.ThrowIfCancellationRequested();
+            ScopedCache scache = GetScopedData(target, key);
             if(scache == null) return Task.FromResult(false);
 
             lock(scache.LOCK) {

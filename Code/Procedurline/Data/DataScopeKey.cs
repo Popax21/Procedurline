@@ -263,7 +263,7 @@ namespace Celeste.Mod.Procedurline {
 
             lock(LOCK) lock(VALIDITY_LOCK) {
                 lock(other.LOCK) lock(other.VALIDITY_LOCK) {
-                    if(!IsValid || !other.IsValid) return false;
+                    if(IsValid != other.IsValid) return false;
                     if(hashCode != other.hashCode) return false;
                     if(scopes.Count != other.scopes.Count) return false;
 

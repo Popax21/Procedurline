@@ -32,12 +32,13 @@ namespace Celeste.Mod.Procedurline {
             TextureScope = scope;
         }
 
+        /// <inheritdoc cref="DataCache{T,D}.GetScopedData(T, DataScopeKey, bool)" />
+        public new ScopedCache GetScopedData(Sprite target, DataScopeKey tkey = null, bool noCreateNew = false) => (ScopedCache) base.GetScopedData(target, tkey, noCreateNew);
 
-        /// <inheritdoc cref="DataCache{T,D}.GetScopedData(T)" />
-        public new ScopedCache GetScopedData(Sprite target) => (ScopedCache) base.GetScopedData(target);
-
-        /// <inheritdoc cref="DataCache{T,D}.GetScopedData(DataScopeKey)" />
-        public new ScopedCache GetScopedData(DataScopeKey key) => (ScopedCache) base.GetScopedData(key);
+        /// <summary>
+        /// Helper method which retrieves the texture scope for a given sprite and key
+        /// </summary>
+        public TextureScope GetTextureScope(Sprite target, DataScopeKey key) => GetScopedData(target, key, false)?.TextureScope;
 
         protected override DataScopeKey CreateKey(Sprite target) {
             string id = ProcedurlineModule.SpriteManager.GetSpriteID(target);
@@ -45,6 +46,6 @@ namespace Celeste.Mod.Procedurline {
             return new SpriteScopeKey(id);
         }
 
-        protected override AsyncDataProcessorCache<Sprite, string, Sprite.Animation>.ScopedCache CreateScopedData(DataScopeKey key) => new ScopedCache(this,(SpriteScopeKey) key);
+        protected override AsyncDataProcessorCache<Sprite, string, Sprite.Animation>.ScopedCache CreateScopedData(DataScopeKey key) => new ScopedCache(this, (SpriteScopeKey) key);
     }
 }
