@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
@@ -177,7 +178,10 @@ namespace Celeste.Mod.Procedurline {
         private void VTexReloadHook(On.Monocle.VirtualTexture.orig_Reload orig, VirtualTexture tex) {
             //Block reloading of textures which are owned by Procedurline
             lock(textureHandles) {
-                if(textureHandles.TryGetValue(tex, out TextureHandle handle) && handle.OwnsTexture) return;
+                if(textureHandles.TryGetValue(tex, out TextureHandle handle) && handle.OwnsTexture) {
+                    Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Attempted reload of Procedurline-owned texture {handle.ToString()}!\n{new StackTrace()}");
+                    return;
+                }
             }
 
             orig(tex);
@@ -186,7 +190,10 @@ namespace Celeste.Mod.Procedurline {
         private void VTexUnloadHook(On.Monocle.VirtualTexture.orig_Unload orig, VirtualTexture tex) {
             //Block unloading of textures which are owned by Procedurline
             lock(textureHandles) {
-                if(textureHandles.TryGetValue(tex, out TextureHandle handle) && handle.OwnsTexture) return;
+                if(textureHandles.TryGetValue(tex, out TextureHandle handle) && handle.OwnsTexture) {
+                    Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Attempted unload of Procedurline-owned texture {handle.ToString()}!\n{new StackTrace()}");
+                    return;
+                }
             }
 
             orig(tex);

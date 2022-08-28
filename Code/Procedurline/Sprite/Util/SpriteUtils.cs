@@ -7,6 +7,7 @@ using Monocle;
 
 namespace Celeste.Mod.Procedurline {
     public static class SpriteUtils {
+        private static readonly PropertyInfo Sprite_Animating = typeof(Sprite).GetProperty(nameof(Sprite.Animating));
         private static readonly PropertyInfo Sprite_CurrentAnimationID = typeof(Sprite).GetProperty(nameof(Sprite.CurrentAnimationID));
         private static readonly PropertyInfo Sprite_CurrentAnimationFrame = typeof(Sprite).GetProperty(nameof(Sprite.CurrentAnimationFrame));
         private static readonly PropertyInfo Sprite_LastAnimationID = typeof(Sprite).GetProperty(nameof(Sprite.LastAnimationID));
@@ -29,6 +30,7 @@ namespace Celeste.Mod.Procedurline {
         /// </summary>
         public static Sprite CloneInto(this Sprite sprite, Sprite target) => Sprite_CloneInto(sprite, target);
 
+        public static void SetAnimating(this Sprite sprite, bool val) => Sprite_Animating.SetValue(sprite, val);
         public static void SetCurrentAnimationID(this Sprite sprite, string val) => Sprite_CurrentAnimationID.SetValue(sprite, val);
         public static void SetLastAnimationID(this Sprite sprite, string val) => Sprite_LastAnimationID.SetValue(sprite, val);
         public static void SetAnimationDict(this Sprite sprite, Dictionary<string, Sprite.Animation> val) => Sprite_animations.SetValue(sprite, val);
@@ -73,13 +75,14 @@ namespace Celeste.Mod.Procedurline {
         /// </summary>
         public static void SetFrame(this Sprite sprite, MTexture frame) => Sprite_SetFrame(sprite, frame);
 
+        //FIXME Something's broken after F5 reload
         /// <summary>
         /// Reloads the sprite's current animation. This can be used when you changed some animation data on the fly, and want it to take effect immediatly.
         /// </summary>
         public static void ReloadAnimation(this Sprite sprite, string animId = null) {
             //Get the currently playing animation
             string curAnim = sprite.CurrentAnimationID;
-            if(!sprite.Animating || string.IsNullOrEmpty(curAnim)) curAnim = sprite.LastAnimationID;
+            if(string.IsNullOrEmpty(curAnim)) curAnim = sprite.LastAnimationID;
             if(!string.IsNullOrEmpty(curAnim) && (animId == null || curAnim.Equals(animId, StringComparison.OrdinalIgnoreCase))) {
                 sprite.Texture = null;
 
@@ -89,13 +92,16 @@ namespace Celeste.Mod.Procedurline {
                     Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Currently playing sprite animation '{curAnim}' [sprite '{ProcedurlineModule.SpriteManager?.GetSpriteID(sprite) ?? sprite.Path ?? "?????"}'] doesn't exit anymore after reload!");
                     sprite.Stop();
                 } else {
-                    if(sprite.Animating && !string.IsNullOrEmpty(sprite.CurrentAnimationID)) {
+                    if(!string.IsNullOrEmpty(sprite.CurrentAnimationID)) {
                         //Replace the internal animation reference
+                        Sprite_Animating.SetValue(sprite, anim.Delay > 0);
                         Sprite_currentAnimation.SetValue(sprite, anim);
 
-                        //Clamp frame index if the animation length shrunk
+                        //Replace the current frame, clamp frame index if the animation length shrunk
                         if(sprite.CurrentAnimationFrame < anim.Frames.Length) {
-                            sprite.Texture = anim.Frames[sprite.CurrentAnimationFrame];
+                            sprite.SetFrame(anim.Frames[sprite.CurrentAnimationFrame]);
+                        } else {
+                            sprite.SetFrame(anim.Frames[anim.Frames.Length-1]);
                         }
                     } else if(anim.Goto != null) {
                         //We now have a Goto, utilize it

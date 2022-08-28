@@ -31,6 +31,7 @@ namespace Celeste.Mod.Procedurline {
 
         private CancellationTokenSource cancelSrc;
         private Dictionary<string, Task<Sprite.Animation>> procTasks = new Dictionary<string, Task<Sprite.Animation>>(StringComparer.OrdinalIgnoreCase);
+        private Dictionary<string, CustomSpriteAnimation> regCustomSprites = new Dictionary<string, CustomSpriteAnimation>(StringComparer.OrdinalIgnoreCase);
 
         internal SpriteHandler(Sprite sprite, string spriteId, bool ownedByManager) {
             Sprite = sprite;
@@ -108,10 +109,12 @@ namespace Celeste.Mod.Procedurline {
                     procTasks.Add(animId, procTask = ProcessAnimation(animId, origAnim, cancelSrc.Token));
                     procTask.ContinueWithOrInvoke(t => {
                         if(t.Status == TaskStatus.RanToCompletion) {
-                            MainThreadHelper.Do(() => Sprite.ReloadAnimation());  
+                            //If it is a custom sprite animation, handle it properly
+                            if(t.Result is CustomSpriteAnimation customAnim) HandleCustomAnimation(customAnim);
                         } else if(t.Exception != null) {
                             Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Error processing sprite '{SpriteID}' animation '{animId}': {t.Exception}");
                         }
+                        MainThreadHelper.Do(() => Sprite.ReloadAnimation());  
                     }, cancelSrc.Token);
                 }
 
@@ -152,6 +155,7 @@ namespace Celeste.Mod.Procedurline {
                 }
 
                 //Return the original animation while the processor task is still running
+                if(origAnim is CustomSpriteAnimation customAnim) HandleCustomAnimation(customAnim);
                 return origAnim;
             }
         }
@@ -170,6 +174,10 @@ namespace Celeste.Mod.Procedurline {
                 hasValidKey = false;
                 ScopeKey.Reset();
 
+                //Unregister from animations
+                foreach(CustomSpriteAnimation anim in regCustomSprites.Values) anim.UnregisterHandler(this);
+                regCustomSprites.Clear();
+
                 //Cancel all tasks
                 cancelSrc?.Cancel();
                 cancelSrc?.Dispose();
@@ -178,6 +186,22 @@ namespace Celeste.Mod.Procedurline {
 
                 queueReload = true;
             }
+        }
+
+        private void HandleCustomAnimation(CustomSpriteAnimation anim) {
+            lock(LOCK) {
+                if(!regCustomSprites.TryGetValue(anim.AnimationID, out CustomSpriteAnimation oldAnim) || oldAnim != anim) {
+                    //Unregister old animation
+                    oldAnim?.UnregisterHandler(this);
+
+                    //Register new animation
+                    anim.RegisterHandler(this);
+                    regCustomSprites[anim.AnimationID] = anim;
+                }
+            }
+
+            //Start animation processing
+            anim.ProcessData();
         }
 
         private void ScopeInvalidated(IScopedInvalidatable key) => ResetCache();

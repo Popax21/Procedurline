@@ -26,7 +26,7 @@ namespace Celeste.Mod.Procedurline {
             Position = sprite.Position;
             Origin = sprite.Origin;
             Justify = sprite.Justify;
-            CurrentAnimationID = sprite.Animating ? sprite.CurrentAnimationID : null;
+            CurrentAnimationID = sprite.CurrentAnimationID;
             LastAnimationID = sprite.LastAnimationID;
             CurrentAnimationFrame = sprite.CurrentAnimationFrame;
             AnimationTimer = sprite.GetAnimationTimer();
@@ -58,7 +58,7 @@ namespace Celeste.Mod.Procedurline {
                     //Transfer over animation ID, frame index and animation timer
                     //Clamp the frame index to the new animation frame length
                     target.Play(curAnim, true, false);
-                    target.SetAnimationFrame(Calc.Clamp(CurrentAnimationFrame, 0, anim.Frames.Length) - 1);
+                    target.SetAnimationFrame(Calc.Clamp(CurrentAnimationFrame, 0, anim.Frames.Length - 1));
                     target.SetAnimationTimer(AnimationTimer);
                 } else if(anim.Goto != null) {
                     //There now is a Goto

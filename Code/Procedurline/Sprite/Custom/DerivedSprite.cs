@@ -51,20 +51,16 @@ namespace Celeste.Mod.Procedurline {
             private async Task InvokeProcessor(ulong valToken, CancellationToken token) {
                 AsyncRef<TextureHandle> texHandleRef = new AsyncRef<TextureHandle>();
                 try {
+                    //Run processor
+                    Stopwatch timer = ProcedurlineModule.Settings.LogProcessingTimes ? Stopwatch.StartNew() : null;
+
                     //Get original animation's data
                     AsyncRef<SpriteAnimationData> procAnimData = new AsyncRef<SpriteAnimationData>();
                     using(procAnimData.Data = await ProcedurlineModule.SpriteManager.GetAnimationData(OriginalAnimation)) {
-                        //Run processor
-                        Stopwatch timer = ProcedurlineModule.Settings.LogProcessingTimes ? Stopwatch.StartNew() : null;
-
                         bool didModify;
                         using(DataScopeKey scopeKey = CloneScopeKey(valToken)) {
                             if(scopeKey == null) return;
                             didModify = await Sprite.Processor.ProcessDataAsync(Sprite, scopeKey, AnimationID, procAnimData, token);
-                        }
-
-                        if(timer != null) {
-                            Logger.Log(ProcedurlineModule.Name, $"Finished processing DerivedSprite animation '{Sprite.SpriteID}' animation '{AnimationID}' (took {timer.ElapsedMilliseconds}ms)");
                         }
 
                         //Create the animation
@@ -73,8 +69,12 @@ namespace Celeste.Mod.Procedurline {
                             procAnim = await ProcedurlineModule.SpriteManager.CreateAnimation(AnimationID, Sprite.TextureScope, procAnimData, token, texHandleRef);
                         }
 
+                        if(timer != null) {
+                            Logger.Log(ProcedurlineModule.Name, $"Finished processing DerivedSprite animation '{Sprite.SpriteID}' animation '{AnimationID}' (took {timer.ElapsedMilliseconds}ms)");
+                        }
+
                         //Replace animation
-                        ReplaceAnimation(procAnim, texHandleRef.Data, valToken, true);
+                        await ReplaceAnimation(procAnim, texHandleRef.Data, valToken, true);
                     }
                 } catch(Exception e) {
                     texHandleRef?.Data?.Dispose();
@@ -88,14 +88,14 @@ namespace Celeste.Mod.Procedurline {
                     lock(LOCK) errorAnim ??= CreateErrorAnimation();
 
                     //Replace with error animation
-                    ReplaceAnimation(errorAnim, null, valToken, true);
+                    await ReplaceAnimation(errorAnim, null, valToken, true);
 
                     throw;
                 }
             }
 
-            private void ReplaceAnimation(Sprite.Animation anim, TextureHandle tex, ulong valToken, bool markValid) {
-                MainThreadHelper.Do(() => {
+            private Task ReplaceAnimation(Sprite.Animation anim, TextureHandle tex, ulong valToken, bool markValid) {
+                return ProcedurlineModule.GlobalManager.MainThreadTaskFactory.StartNew(() => {
                     lock(LOCK) {
                         lock(Sprite.LOCK) {
                             //Try to mark the animation is valid, or check if the token still is valid

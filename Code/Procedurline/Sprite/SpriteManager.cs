@@ -193,11 +193,7 @@ namespace Celeste.Mod.Procedurline {
                 }
 
                 //We have to get the animation's data on the main thread
-                //Also MainThreadHelper.Get is broken
-                TaskCompletionSource<Tuple<float, Chooser<string>, MTexture[]>> tcs = new TaskCompletionSource<Tuple<float, Chooser<string>, MTexture[]>>();
-                MainThreadHelper.Do(() => tcs.SetResult(new Tuple<float, Chooser<string>, MTexture[]>(customAnim.Delay, customAnim.Goto, customAnim.Frames)));
-
-                Tuple<float, Chooser<string>, MTexture[]> data = await tcs.Task;
+                Tuple<float, Chooser<string>, MTexture[]> data = await ProcedurlineModule.GlobalManager.MainThreadTaskFactory.StartNew(() => new Tuple<float, Chooser<string>, MTexture[]>(customAnim.Delay, customAnim.Goto, customAnim.Frames));
                 animDelay = data.Item1;
                 animGoto = data.Item2;
                 animFrames = data.Item3;
@@ -491,12 +487,7 @@ namespace Celeste.Mod.Procedurline {
             //Forward to the sprite handler
             SpriteHandler handler = GetSpriteHandler(sprite);
             if(handler == null) return dict[id];
-            Sprite.Animation anim = handler.GetProcessedAnimation(id) ?? throw new KeyNotFoundException($"Animation '{id}' not found!");
-    
-            //If it's a custom animation, start its processing
-            if(anim is CustomSpriteAnimation customAnim) ProcessCustomAnimation(customAnim);
-
-            return anim;
+            return handler.GetProcessedAnimation(id) ?? throw new KeyNotFoundException($"Animation '{id}' not found!");
         }
 
         private void DrawSpriteHandlerDebug(Scene scene, Matrix mat) {

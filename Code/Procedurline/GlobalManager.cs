@@ -9,13 +9,66 @@ using MonoMod.RuntimeDetour;
 
 namespace Celeste.Mod.Procedurline {
     /// <summary>
-    /// Handles global state, hooks, scopes, and other miscellaneous things.
+    /// Handles global state, hooks, scopes, and other miscellaneous things
     /// </summary>
     public sealed class GlobalManager : GameComponent {
+        public static readonly TaskCreationOptions ForceQueue = TaskCreationOptions.LongRunning;
+
+        /// <summary>
+        /// Implements a task scheduler which executes tasks on the main thread
+        /// </summary>
+        public sealed class MainThreadTaskScheduler : TaskScheduler {
+            private readonly LinkedList<Task> tasks = new LinkedList<Task>();
+
+            public void RunTasks() {
+                if(!MainThreadHelper.IsMainThread) throw new InvalidOperationException("Not on main thread!");
+
+                while(true) {
+                    //Dequeue a task
+                    Task task;
+                    lock(tasks) {
+                        if(tasks.Count <= 0) break;
+                        task = tasks.First.Value;
+                        tasks.RemoveFirst();
+                    }
+
+                    //Execute it
+                    TryExecuteTask(task);
+                }
+            }
+
+            protected override IEnumerable<Task> GetScheduledTasks() {
+                lock(tasks) return tasks;
+            }
+
+            protected override void QueueTask(Task task) {
+                lock(tasks) tasks.AddLast(task);
+            }
+
+            protected override bool TryDequeue(Task task) {
+                lock(tasks) return tasks.Remove(task);
+            }
+
+            protected override bool TryExecuteTaskInline(Task task, bool wasQueued) {
+                if(!MainThreadHelper.IsMainThread) return false;
+                if((task.CreationOptions & ForceQueue) != 0) return false;
+
+                if(wasQueued && !TryDequeue(task)) return false;
+                return TryExecuteTask(task);
+            }
+        }
+
+        public readonly MainThreadTaskScheduler MainThreadScheduler;
+        public readonly TaskFactory MainThreadTaskFactory;
+
         private LinkedList<Task> blockingTasks = new LinkedList<Task>();
 
         internal GlobalManager(Game game) : base(game) {
             game.Components.Add(this);
+
+            //Setup main thread task scheduler/factory
+            MainThreadScheduler = new MainThreadTaskScheduler();
+            MainThreadTaskFactory = new TaskFactory(MainThreadScheduler);
 
             //Install hooks
             using(new DetourContext(ProcedurlineModule.HOOK_PRIO)) {
@@ -47,6 +100,9 @@ namespace Celeste.Mod.Procedurline {
             ILCursor cursor = new ILCursor(ctx);
 
             cursor.EmitDelegate<Func<bool>>(() => {
+                //Allow the main thread scheduler to execute tasks
+                MainThreadScheduler.RunTasks();
+
                 //Check if all blocking tasks have completed
                 lock(blockingTasks) {
                     for(LinkedListNode<Task> node = blockingTasks.First, nnode = node?.Next; node != null; node = nnode, nnode = node?.Next) {

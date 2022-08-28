@@ -15,6 +15,10 @@ namespace Celeste.Mod.Procedurline.Demo {
             dispPool = DisposablePoolComponent.AddTo(this);
         }
 
+        public override void Awake(Scene scene) {
+            base.Awake(scene);
+        }
+
         protected override Sprite ProcessSprite(Sprite origSprite) {
             if(recoloredSprites == null) {
                 //Recolor sprites
@@ -27,24 +31,28 @@ namespace Celeste.Mod.Procedurline.Demo {
                 }
             }
 
-            //Create sprite mux
-            dispPool.Add(spriteMux = new SpriteMultiplexer("pldemo-refill-mux", recoloredSprites));
-
             //Create sprite
+            dispPool.Add(spriteMux = new SpriteMultiplexer("pldemo-refill-mux", recoloredSprites));
             return dispPool.Add(new MixerSprite("pldemo-refill", origSprite, spriteMux.WrapAsync()));
         }
 
         protected override bool OnTouch(Player player) {
             Logger.Log("PLdemo", "Player touched refill!");
+            return true;
+        }
+
+        protected override void Respawn() {
+            Logger.Log("PLdemo", "Refill is respawning!");
 
             //Randomize color
             int colorIdx = Calc.Random.Range(0, colors.Length);
             spriteMux.MuxIndex = colorIdx;
             RecolorGFX(colors[colorIdx]);
 
-            return true;
+            base.Respawn();
         }
 
         protected override string CollectSFX => SFX.char_mad_death;
+        protected override string RespawnSFX => SFX.char_mad_revive;
     }
 }

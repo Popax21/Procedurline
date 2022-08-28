@@ -1,6 +1,6 @@
 using System;
+using System.Threading.Tasks;
 using System.Collections.Generic;
-
 using Monocle;
 
 namespace Celeste.Mod.Procedurline {
@@ -79,8 +79,8 @@ namespace Celeste.Mod.Procedurline {
         public DisposablePoolComponent() : base(false, false) {}
 
         public void Dispose() {
-            //Delay disposal of the pool till the end of the frame, otherwise we might run into some realy nasty race conditions regarding component callback order
-            Celeste.Scene.OnEndOfFrame += Pool.Dispose;
+            //Delay disposal of the pool till the next frame, otherwise we might run into some really nasty race conditions related to component callback order
+            ProcedurlineModule.GlobalManager.MainThreadTaskFactory.StartNew(Pool.Dispose, GlobalManager.ForceQueue);
         }
 
         public override void Removed(Entity entity) {
