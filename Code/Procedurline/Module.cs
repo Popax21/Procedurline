@@ -48,14 +48,12 @@ namespace Celeste.Mod.Procedurline {
             //Apply content hooks and patches
             foreach(Type type in typeof(ProcedurlineModule).Assembly.GetTypes()) {
                 foreach(MethodInfo method in type.GetMethods(PatchUtils.BindAllStatic | BindingFlags.DeclaredOnly)) {
-                    if(method.GetCustomAttribute(typeof(ContentInitAttribute)) is ContentInitAttribute) method.Invoke(null, Array.Empty<object>());
-
                     if(method.GetCustomAttribute(typeof(ContentHookAttribute)) is ContentHookAttribute hookAttr) {
                         Type targetType = (hookAttr.TargetTypeName != null) ? Assembly.GetEntryAssembly().GetType(hookAttr.TargetTypeName, true, true) : type.BaseType;
                         dispPool.Add(new Hook(targetType.GetMethodRecursive(hookAttr.TargetMethodName, PatchUtils.BindAll), method));
                     }
 
-                    if(method.GetCustomAttribute(typeof(ContentILHookAttribute)) is ContentILHookAttribute ilHookAttr) {
+                    foreach(ContentILHookAttribute ilHookAttr in method.GetCustomAttributes(typeof(ContentILHookAttribute))) {
                         Type targetType = (ilHookAttr.TargetTypeName != null) ? Assembly.GetEntryAssembly().GetType(ilHookAttr.TargetTypeName, true, true) : type.BaseType;
                         MethodInfo targetMethod = targetType.GetMethodRecursive(ilHookAttr.TargetMethodName, PatchUtils.BindAll);
                         if(ilHookAttr.HookStateMachine) targetMethod = targetMethod.GetStateMachineTarget();
@@ -76,9 +74,16 @@ namespace Celeste.Mod.Procedurline {
                 }
 
                 foreach(PropertyInfo prop in type.GetProperties(PatchUtils.BindAllInstance | BindingFlags.DeclaredOnly)) {
-                    foreach(ContentPatchSFXAttribute sfxAttr in prop.GetCustomAttributes(typeof(ContentPatchSFXAttribute)).Cast<ContentPatchSFXAttribute>()) {
+                    foreach(ContentPatchSFXAttribute sfxAttr in prop.GetCustomAttributes(typeof(ContentPatchSFXAttribute))) {
                         type.BaseType.GetMethodRecursive(sfxAttr.TargetMethodName, PatchUtils.BindAllInstance).PatchSFX(prop, dispPool);
                     }
+                }
+            }
+
+            //Call content initalizers
+            foreach(Type type in typeof(ProcedurlineModule).Assembly.GetTypes()) {
+                foreach(MethodInfo method in type.GetMethods(PatchUtils.BindAllStatic)) {
+                    if(method.GetCustomAttribute(typeof(ContentInitAttribute)) is ContentInitAttribute) method.Invoke(null, Array.Empty<object>());
                 }
             }
         }

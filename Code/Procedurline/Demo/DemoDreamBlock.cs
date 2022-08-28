@@ -20,6 +20,7 @@ namespace Celeste.Mod.Procedurline.Demo {
             if((player.Position.X < Left || Right < player.Position.X) && Top <= player.Position.Y && player.Position.Y <= Bottom) player.Speed.X *= -1;
             if((player.Position.Y < Top || Bottom < player.Position.Y) && Left <= player.Position.X && player.Position.X <= Right) player.Speed.Y *= -1;
             player.Position = oldPos;
+            player.Play(BounceSFX, null, 0f);
             return Player.StDreamDash;
         }
 

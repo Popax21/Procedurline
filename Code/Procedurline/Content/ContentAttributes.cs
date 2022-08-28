@@ -31,7 +31,7 @@ namespace Celeste.Mod.Procedurline {
     /// <summary>
     /// Marks this method as an IL hook to apply to a content method.
     /// </summary>
-    [AttributeUsage(AttributeTargets.Method, Inherited = false)]
+    [AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
     internal sealed class ContentILHookAttribute : Attribute {
         public readonly string TargetTypeName, TargetMethodName;
         public readonly bool HookStateMachine;

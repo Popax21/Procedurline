@@ -69,6 +69,7 @@ namespace Celeste.Mod.Procedurline {
         private static readonly FieldInfo Player_dreamBlock = typeof(Player).GetField("dreamBlock", BindingFlags.NonPublic | BindingFlags.Instance);
 
         [ContentILHookAttribute("Render")]
+        [ContentILHookAttribute("WobbleLine")]
         private static void RenderModifier(ILContext ctx) {
             //Hook all accesses to the static DreamBlock color fields
             void HookColorAccesses(string colorName, string dataFieldName) {
@@ -370,30 +371,6 @@ namespace Celeste.Mod.Procedurline {
                     didPatchBounceCheck = true;
                 }
                 if(!didPatchBounceCheck) Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Couldn't patch DreamBlock bounce check!");
-            }
-
-            //Patch bounce SFX
-            {
-                bool didPatchSFX = false;
-                cursor.Index = 0;
-                while(cursor.TryGotoNext(MoveType.After, i => i.MatchLdstr("event:/game/general/assist_dreamblockbounce"))) {
-                    ILLabel notCustom = cursor.DefineLabel();
-
-                    //Check if we previously were in a custom dream block
-                    cursor.Emit(OpCodes.Ldloc, prevBlockVar);
-                    cursor.Emit(OpCodes.Isinst, typeof(CustomDreamBlock));
-                    cursor.Emit(OpCodes.Brfalse, notCustom);
-
-                    //Replace SFX with the SFX property's value
-                    cursor.Emit(OpCodes.Pop);
-                    cursor.Emit(OpCodes.Ldloc, prevBlockVar);
-                    cursor.Emit(OpCodes.Castclass, typeof(CustomDreamBlock));
-                    cursor.Emit(OpCodes.Callvirt, typeof(CustomDreamBlock).GetProperty(nameof(BounceSFX), PatchUtils.BindAllInstance).GetMethod);
-
-                    cursor.MarkLabel(notCustom);
-                    didPatchSFX = true;
-                }
-                if(!didPatchSFX) Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Couldn't patch DreamBlock bounce SFX!");
             }
         }
 
