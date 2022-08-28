@@ -35,9 +35,11 @@ namespace Celeste.Mod.Procedurline {
 
         //Protected using LOCK, individual entries are additionally secured using their scope's lock
         internal ConcurrentDictionary<DataScope, LinkedListNode<DataScopeKey>> scopes = new ConcurrentDictionary<DataScope, LinkedListNode<DataScopeKey>>();
+        private HashSet<DataScope> nonTransparentScopes = new HashSet<DataScope>();
+        private int hashCode;
+
         internal bool isInvalidating;
         private bool isValid;
-        private int hashCode;
 
         /// <summary>
         /// Contains the dictionary used to store scope data entries. These entries can be used to store auxiliary data along with data keys, which can then be efficiently queried by e.g. data processors.
@@ -133,7 +135,17 @@ namespace Celeste.Mod.Procedurline {
                 if(scope.registeredKeys == null) return false;
                 if(scopes.ContainsKey(scope)) return false;
 
-                scopes.TryAdd(scope, scope.registeredKeys.AddLast(this));
+                if(!scopes.TryAdd(scope, scope.registeredKeys.AddLast(this))) {
+                    Environment.FailFast($"Could not add DataScope {scope} to key {this} scopes dict even though 'ContainsKey(scope) == false'!");
+                }
+
+                if(!scope.transparent) {
+                    nonTransparentScopes.Add(scope);
+
+                    //Update hash code
+                    //Yes, using XORs for hashing is usually not a good idea, but we have to ensure that no matter the order of scopes registration, the same hash code is returned
+                    hashCode = unchecked(hashCode ^ scope.GetHashCode());
+                }
 
                 //If the scope has a data store entry, add it to the key's store
                 if(scope.DataStoreEntry is DictionaryEntry entry) {
@@ -141,10 +153,6 @@ namespace Celeste.Mod.Procedurline {
                         Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"DataScopeKey auxiliary data store key conflict for key '{entry.Key}' [type {entry.Key.GetType()}]!");
                     }
                 }
-
-                //Update hash code
-                //Yes, using XORs for hashing is usually not a good idea, but we have to ensure that no matter the order of scopes registration, the same hash code is returned
-                hashCode = unchecked(hashCode ^ scope.GetHashCode());
             }
             return true;
         }
@@ -203,10 +211,13 @@ namespace Celeste.Mod.Procedurline {
                 //Cleanup
                 RemoveFromScopes();
                 scopes.Clear();
-                DataStore.Clear();
+                nonTransparentScopes.Clear();
+
                 isInvalidating = false;
                 isValid = true;
                 hashCode = HASH_MAGIC;
+
+                DataStore.Clear();
 
                 //Dispose owned objects
                 foreach(IDisposable obj in ownedObjects) obj.Dispose();
@@ -265,10 +276,10 @@ namespace Celeste.Mod.Procedurline {
                 lock(other.LOCK) lock(other.VALIDITY_LOCK) {
                     if(IsValid != other.IsValid) return false;
                     if(hashCode != other.hashCode) return false;
-                    if(scopes.Count != other.scopes.Count) return false;
+                    if(nonTransparentScopes.Count != other.nonTransparentScopes.Count) return false;
 
-                    foreach(DataScope scope in scopes.Keys) {
-                        if(!other.scopes.ContainsKey(scope)) return false;
+                    foreach(DataScope scope in nonTransparentScopes) {
+                        if(!other.nonTransparentScopes.Contains(scope)) return false;
                     }
                     return true;
                 }
@@ -289,7 +300,7 @@ namespace Celeste.Mod.Procedurline {
                 StringBuilder builder = new StringBuilder();
 
                 int numAnonm = 0;
-                foreach(DataScope scope in scopes.Keys) {
+                foreach(DataScope scope in nonTransparentScopes) {
                     if(scope.Name != null) {
                         if(builder.Length > 0) builder.Append(delim);
                         builder.Append(scope.Name);

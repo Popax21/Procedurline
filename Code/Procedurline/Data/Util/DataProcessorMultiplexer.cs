@@ -25,9 +25,9 @@ namespace Celeste.Mod.Procedurline {
         protected DataScopeMultiplexer(string name, int count) {
             //Create data scopes
             Count = count;
-            MuxScope = new DataScope(name);
+            MuxScope = new DataScope(name) { Transparent = true };
             IndexScopes = new DataScope[count];
-            for(int i = 0; i < count; i++) IndexScopes[i] = new DataScope(null, new DictionaryEntry(indexStoreKey, i));
+            for(int i = 0; i < count; i++) IndexScopes[i] = new DataScope((name != null) ? $"{name}[{i}]" : null, new DictionaryEntry(indexStoreKey, i));
         }
 
         public void Dispose() {
@@ -91,7 +91,10 @@ namespace Celeste.Mod.Procedurline {
         private IDataProcessor<T, I, D>[] processors;
 
         public DataProcessorMultiplexer(string name, int count) : this(name, new IDataProcessor<T, I, D>[count]) {}
-        public DataProcessorMultiplexer(string name, params IDataProcessor<T, I, D>[] processors) : base(name, processors.Length) => this.processors = processors;
+        public DataProcessorMultiplexer(string name, params IDataProcessor<T, I, D>[] processors) : base(name, processors.Length) {
+            this.processors = processors;
+            for(int i = 0; i < processors.Length; i++) IndexScopes[i].Transparent = (processors[i] == null);
+        }
 
         public override void RegisterScopes(T target, DataScopeKey key) {
             lock(LOCK) {
@@ -129,6 +132,7 @@ namespace Celeste.Mod.Procedurline {
                 lock(LOCK) {
                     if(IsDisposed) throw new ObjectDisposedException("DataProcessorMultiplexer");
                     processors[idx] = value;
+                    IndexScopes[idx].Transparent = (value == null);
                     IndexScopes[idx].Invalidate();
                 }
             }
@@ -144,7 +148,10 @@ namespace Celeste.Mod.Procedurline {
         private IAsyncDataProcessor<T, I, D>[] processors;
 
         public AsyncDataProcessorMultiplexer(string name, int count) : this(name, new IAsyncDataProcessor<T, I, D>[count]) {}
-        public AsyncDataProcessorMultiplexer(string name, params IAsyncDataProcessor<T, I, D>[] processors) : base(name, processors.Length) => this.processors = processors;
+        public AsyncDataProcessorMultiplexer(string name, params IAsyncDataProcessor<T, I, D>[] processors) : base(name, processors.Length) {
+            this.processors = processors;
+            for(int i = 0; i < processors.Length; i++) IndexScopes[i].Transparent = (processors[i] == null);
+        }
 
         public override void RegisterScopes(T target, DataScopeKey key) {
             lock(LOCK) {
@@ -182,6 +189,7 @@ namespace Celeste.Mod.Procedurline {
                 lock(LOCK) {
                     if(IsDisposed) throw new ObjectDisposedException("AsyncDataProcessorMultiplexer");
                     processors[idx] = value;
+                    IndexScopes[idx].Transparent = (value == null);
                     IndexScopes[idx].Invalidate();
                 }
             }

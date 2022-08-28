@@ -13,6 +13,7 @@ namespace Celeste.Mod.Procedurline {
     public class DataScope : IDisposable, IScopedInvalidatable, IReadOnlyCollection<DataScopeKey> {
         internal readonly object LOCK = new object(); //Locking strategy: once a scope lock is held, you CAN NOT lock any other locks, neither scope nor key locks
         internal LinkedList<DataScopeKey> registeredKeys = new LinkedList<DataScopeKey>();
+        internal bool transparent;
 
         /// <summary>
         /// Holds the entry which will be added to <see cref="DataScopeKey" />'s <see cref="DataScopeKey.DataStore" /> once the scope is registered on them. This mechanism can be used to efficiently store auxiliary data together with a given scope.
@@ -121,6 +122,27 @@ namespace Celeste.Mod.Procedurline {
                     if(registeredKeys == null) throw new ObjectDisposedException("DataScope");
                     return registeredKeys.Count;
                 }
+            }
+        }
+
+        /// <summary>
+        /// Accesses this data scope's transparent flag. Transparent data scopes are not taken into consideration when comparing <see cref="DataScopeKey" />s, and are not listed in debug views.
+        /// Changing this flag will trigger a scope invalidation.
+        /// </summary>
+        public bool Transparent {
+            get {
+                lock(LOCK) {
+                    if(registeredKeys == null) throw new ObjectDisposedException("DataScope");
+                    return transparent;
+                }
+            }
+            set {
+                lock(LOCK) {
+                    if(registeredKeys == null) throw new ObjectDisposedException("DataScope");
+                    if(transparent == value) return;
+                    transparent = value;
+                }
+                Invalidate();
             }
         }
 
