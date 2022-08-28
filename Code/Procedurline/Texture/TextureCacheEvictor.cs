@@ -17,8 +17,8 @@ namespace Celeste.Mod.Procedurline {
         private GCCallback gcCallback;
         private Process curProc;
 
-        private long totalCacheSize;
-        private LinkedList<TextureHandle> cachedTextures = new LinkedList<TextureHandle>();
+        private long totalCacheSize, effCacheSize;
+        private LinkedList<TextureHandle> cachedTextures = new LinkedList<TextureHandle>(), pseudoCachedTextures = new LinkedList<TextureHandle>();
 
         private volatile bool inEvictSweep;
         private LinkedList<TextureHandle> evictionBacklog = new LinkedList<TextureHandle>();
@@ -77,10 +77,18 @@ namespace Celeste.Mod.Procedurline {
 
                 inEvictSweep = true;
                 try {
+                    //If there are any pseudo-cached textures, try to evict them
+                    if(pseudoCachedTextures.Count > 0) {
+                        for(LinkedListNode<TextureHandle> node = pseudoCachedTextures.First, nnode = node?.Next; node != null; node = nnode, nnode = node?.Next) {
+                            RemoveTexture(node.Value, false);
+                        }
+                    }
+
+                    //Evict if cache is over maxmimum size
                     long maxCacheSize = MaxCacheSize;
                     long totalEvictedSize = 0;
                     LinkedListNode<TextureHandle> curEvictionCandidate = cachedTextures.Last;
-                    while(curEvictionCandidate != null && (evictAll || totalCacheSize > maxCacheSize)) {
+                    while(curEvictionCandidate != null && (evictAll || effCacheSize > maxCacheSize)) {
                         LinkedListNode<TextureHandle> nextCand = curEvictionCandidate.Previous;
 
                         //Try to evict the current candidate
@@ -93,7 +101,7 @@ namespace Celeste.Mod.Procedurline {
                         curEvictionCandidate = nextCand;
                     }
 
-                    if(totalEvictedSize > 0) Logger.Log(LogLevel.Info, ProcedurlineModule.Name, $"Evicted {totalEvictedSize} bytes out of texture data cache [cache size {(totalCacheSize + totalEvictedSize) / 1024}kB -> {totalCacheSize / 1024}kB / max {maxCacheSize / 1024}kB]");
+                    if(totalEvictedSize > 0) Logger.Log(LogLevel.Info, ProcedurlineModule.Name, $"Evicted {totalEvictedSize} bytes out of texture data cache [effective cache size {(effCacheSize + totalEvictedSize) / 1024}kB -> {effCacheSize / 1024}kB / max {maxCacheSize / 1024}kB]");
                     return totalEvictedSize;
                 } finally {
                     //Clear backlog
@@ -116,13 +124,17 @@ namespace Celeste.Mod.Procedurline {
             lock(LOCK) {
                 if(curProc == null) throw new ObjectDisposedException("TextureCacheEvictor");
 
-                //Check if the texture's cached size is below half of the maxmimum cache size
-                long texSize = tex.Width*tex.Height*4;
-                if(!force && texSize > MaxCacheSize/2) return false;
+                //Check if the texture's cached size is below the maxmimum cache size
+                long texSize = tex.Width*tex.Height*4;  
+                if(texSize > MaxCacheSize) {
+                    tex.isPseudoCached = true;
+                    if(!force) return false;
+                } else tex.isPseudoCached = false;
 
                 //Add to texture list
-                tex.cacheNode = cachedTextures.AddFirst(tex);
+                tex.cacheNode = (tex.isPseudoCached ? pseudoCachedTextures : cachedTextures).AddFirst(tex);
                 totalCacheSize += texSize;
+                if(!tex.isPseudoCached) effCacheSize += texSize;
 
                 //Do an eviction sweep
                 DoSweep();
@@ -130,11 +142,12 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
-        internal bool RemoveTexture(TextureHandle tex, bool texRequested=true) {
-            if(texRequested && inEvictSweep) {
-                //The texture asked that it be removed by itself
-                //As such, we already hold tex.LOCK, and could deadlock with EvictInternal
-                //So, when we are currently doing an eviction sweep, simply add this texture to a list of to-be-removed textures, and abort early
+        internal bool RemoveTexture(TextureHandle tex, bool fromTex=true) {
+            if(fromTex && inEvictSweep) {
+                //The texture asked that it be removed by itself, while there currently is an eviction sweep
+                //As such, we already hold tex.LOCK, and could deadlock with EvictInternal when it tries to remove the texture as well
+                //So simply add this texture to a list of to-be-removed textures, and abort early
+                if(tex.cacheNode == null) return false;
                 lock(evictionBacklog) evictionBacklog.AddLast(tex);
                 return false;
             }
@@ -145,13 +158,15 @@ namespace Celeste.Mod.Procedurline {
                 lock(tex.LOCK) {
                     if(tex.cacheNode == null) return false;
 
-                    //Evict cached data
+                    //Evict cached data, abort if it's pinned
                     if(!tex.EvictCachedData()) return false;
 
                     //Remove from texture list
-                    cachedTextures.Remove(tex.cacheNode);
+                    long texSize = tex.Width*tex.Height*4;
+                    (tex.isPseudoCached ? pseudoCachedTextures : cachedTextures).Remove(tex.cacheNode);
                     tex.cacheNode = null;
-                    totalCacheSize -= tex.Width*tex.Height*4;
+                    totalCacheSize -= texSize;
+                    if(!tex.isPseudoCached) effCacheSize -= texSize;
 
                     return true;
                 }
@@ -179,7 +194,8 @@ namespace Celeste.Mod.Procedurline {
             DoSweep();
         }
 
-        public long TotalCacheSize => totalCacheSize;
+        public int NumCachedTextures { get { lock(LOCK) return cachedTextures.Count; } }
+        public long TotalCacheSize { get { lock(LOCK) return totalCacheSize; } }
         public long MaxCacheSize => Math.Min(ProcedurlineModule.Settings.MaxTextureCacheSize, Math.Max((MaxMemoryUsage - CurrentMemoryUsage) - ProcedurlineModule.Settings.MinTextureCacheMargin, 0));
 
         public long CurrentMemoryUsage => curProc.WorkingSet64;

@@ -242,6 +242,7 @@ namespace Celeste.Mod.Procedurline {
         [Command("pl_texcache", "Displays information about the Procedurline texture cache")]
         private static void TEXCACHE() {
             string FormatBytes(long bytes) => $"{bytes}B / {bytes / 1024}kB / {bytes / (1024*1024)}mB";
+            Celeste.Commands.Log($"Cached Textures: {ProcedurlineModule.TextureManager.CacheEvictor.NumCachedTextures}");
             Celeste.Commands.Log($"Total size: {FormatBytes(ProcedurlineModule.TextureManager.CacheEvictor.TotalCacheSize)}");
             Celeste.Commands.Log($"Maximum size: {FormatBytes(ProcedurlineModule.TextureManager.CacheEvictor.MaxCacheSize)}");
             Celeste.Commands.Log($"Current memory usage: {FormatBytes(ProcedurlineModule.TextureManager.CacheEvictor.CurrentMemoryUsage)}");

@@ -77,6 +77,7 @@ namespace Celeste.Mod.Procedurline {
         public readonly bool OwnsTexture;
 
         internal LinkedListNode<TextureHandle> cacheNode;
+        internal bool isPseudoCached;
         private int cachePinCount;
         private LinkedList<CachePinHandle> cachePinHandles = new LinkedList<CachePinHandle>();
 

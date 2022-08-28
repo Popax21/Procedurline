@@ -12,17 +12,26 @@ namespace Celeste.Mod.Procedurline {
         public new class ScopedCache : AsyncDataProcessorCache<Sprite, string, Sprite.Animation>.ScopedCache {
             public readonly new SpriteAnimationCache Cache;
             public readonly new SpriteScopeKey Key;
-            public readonly TextureScope TextureScope;
+            private TextureScope texScope;
 
             protected internal ScopedCache(SpriteAnimationCache cache, SpriteScopeKey key) : base(cache, key) {
                 Cache = cache;
                 Key = key;
-                TextureScope = new TextureScope($"{key.SpriteID}:{key.GetScopeListString("-")}", cache.TextureScope);
             }
 
             public override void Dispose() {
                 base.Dispose();
-                TextureScope?.Dispose();
+                texScope?.Dispose();
+            }
+
+            public TextureScope TextureScope {
+                get {
+                    lock(LOCK) {
+                        if(IsDisposed) throw new ObjectDisposedException("ScopedCache");
+                        if(texScope != null) return texScope;
+                        return texScope = new TextureScope($"{Key.SpriteID}:{Key.GetScopeListString("-")}", Cache.TextureScope);
+                    }
+                }
             }
         }
 
