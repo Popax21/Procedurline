@@ -19,10 +19,10 @@ namespace Celeste.Mod.Procedurline {
         }
 
         public static readonly Type DreamParticleType = typeof(DreamBlock).GetNestedType("DreamParticle", BindingFlags.NonPublic);
-        public static readonly FieldInfo DreamParticle_Position = DreamParticleType.GetField("Position", BindingFlags.NonPublic | BindingFlags.Instance);
-        public static readonly FieldInfo DreamParticle_Layer = DreamParticleType.GetField("Layer", BindingFlags.NonPublic | BindingFlags.Instance);
-        public static readonly FieldInfo DreamParticle_TimeOffset = DreamParticleType.GetField("TimeOffset", BindingFlags.NonPublic | BindingFlags.Instance);
-        public static readonly FieldInfo DreamParticle_Color = DreamParticleType.GetField("Color", BindingFlags.NonPublic | BindingFlags.Instance);
+        public static readonly FieldInfo DreamParticle_Position = DreamParticleType.GetField("Position", BindingFlags.Public | BindingFlags.Instance);
+        public static readonly FieldInfo DreamParticle_Layer = DreamParticleType.GetField("Layer", BindingFlags.Public | BindingFlags.Instance);
+        public static readonly FieldInfo DreamParticle_TimeOffset = DreamParticleType.GetField("TimeOffset", BindingFlags.Public | BindingFlags.Instance);
+        public static readonly FieldInfo DreamParticle_Color = DreamParticleType.GetField("Color", BindingFlags.Public | BindingFlags.Instance);
 
         /// <summary>
         /// Gets a <c>DreamParticle</c>'s <see cref="ParticleData" />
@@ -42,10 +42,10 @@ namespace Celeste.Mod.Procedurline {
         /// </summary>
         public static object FromParticleData(ParticleData data) {
             object particle = Activator.CreateInstance(DreamParticleType);
-            DreamParticle_Position.SetValue(data, data.Position);
-            DreamParticle_Layer.SetValue(data, data.Layer);
-            DreamParticle_TimeOffset.SetValue(data, data.TimeOffset);
-            DreamParticle_Color.SetValue(data, data.Color);
+            DreamParticle_Position.SetValue(particle, data.Position);
+            DreamParticle_Layer.SetValue(particle, data.Layer);
+            DreamParticle_TimeOffset.SetValue(particle, data.TimeOffset);
+            DreamParticle_Color.SetValue(particle, data.Color);
             return particle;
         }
 
@@ -54,6 +54,11 @@ namespace Celeste.Mod.Procedurline {
             public Color DeactivatedLineColor, ActivatedLineColor;
             public Color[][] ParticleColors;
         }
+
+        public static readonly Color VanillaDeactivatedBackColor = Calc.HexToColor("1f2e2d");
+        public static readonly Color VanillaActivatedBackColor = Color.Black;
+        public static readonly Color VanillaDeactivatedLineColor = Calc.HexToColor("6a8480");
+        public static readonly Color VanillaActivatedLineColor = Color.White;
 
         public static readonly Color[][] VanillaParticleColors = new Color[][] {
             new Color[] { Calc.HexToColor("ffef11"), Calc.HexToColor("ff00d0"), Calc.HexToColor("08a310") },
@@ -204,7 +209,9 @@ namespace Celeste.Mod.Procedurline {
         [ContentILHookAttribute("Celeste.Player", "DreamDashUpdate")]
         private static void DreamDashUpdateModifer(ILContext ctx) {
             VariableDefinition prevBlockVar = new VariableDefinition(ctx.Import(typeof(DreamBlock)));
+            VariableDefinition prevPosVar = new VariableDefinition(ctx.Import(typeof(Vector2)));
             ctx.Body.Variables.Add(prevBlockVar);
+            ctx.Body.Variables.Add(prevPosVar);
 
             ILCursor cursor = new ILCursor(ctx);
 
@@ -212,6 +219,11 @@ namespace Celeste.Mod.Procedurline {
             cursor.Emit(OpCodes.Ldarg_0);
             cursor.Emit(OpCodes.Ldfld, Player_dreamBlock);
             cursor.Emit(OpCodes.Stloc, prevBlockVar);
+
+            //Store the current player position before it's updated
+            cursor.Emit(OpCodes.Ldarg_0);
+            cursor.Emit(OpCodes.Ldfld, typeof(Player).GetField(nameof(Player.Position)));
+            cursor.Emit(OpCodes.Stloc, prevPosVar);
 
             //Add call to UpdatePlayer
             {
@@ -349,7 +361,9 @@ namespace Celeste.Mod.Procedurline {
                     cursor.Emit(OpCodes.Ldloc, prevBlockVar);
                     cursor.Emit(OpCodes.Castclass, typeof(CustomDreamBlock));
                     cursor.Emit(OpCodes.Ldarg_0);
+                    cursor.Emit(OpCodes.Ldloc, prevPosVar);
                     cursor.Emit(OpCodes.Callvirt, typeof(CustomDreamBlock).GetMethod(nameof(OnCollideSolid), PatchUtils.BindAllInstance));
+                    cursor.Emit(OpCodes.Ret);
 
                     cursor.MarkLabel(notCustom);
                     cursor.Index = prevIdx;
@@ -409,22 +423,31 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
-        /// Called when the player enters the dream block.
+        /// Called when the player enters the dream block
         /// </summary>
         protected virtual void OnEnter(Player player, DreamBlock fromDreamBlock) {}
 
         /// <summary>
-        /// Called when the player exits the dream block.
+        /// Called when the player exits the dream block
         /// </summary>
         protected virtual void OnExit(Player player, DreamBlock toDreamBlock) {}
 
         /// <summary>
-        /// Called when the player hits a solid while in the dream block.
+        /// Called when the player hits a solid while in the dream block
         /// </summary>
         /// <returns>
-        /// <c>true</c> if the player should bounce of the solid, <c>false</c> if they should die (even if they're invincible)
+        /// The state the player should enter
         /// </returns>
-        protected virtual bool OnCollideSolid(Player player) => SaveData.Instance.Assists.Invincible;
+        protected virtual int OnCollideSolid(Player player, Vector2 oldPos) {
+            if(SaveData.Instance.Assists.Invincible) {
+                player.Position = oldPos;
+                player.Speed *= -1f;
+                player.Play(BounceSFX, null, 0f);
+            } else {
+                player.Die(Vector2.Zero, false, true);
+            }
+            return Player.StDreamDash;
+        }
 
         /// <summary>
         /// Called to run the player's update logic while in the dream block. By default, this executes vanilla movement code.
