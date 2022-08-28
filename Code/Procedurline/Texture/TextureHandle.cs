@@ -292,20 +292,11 @@ namespace Celeste.Mod.Procedurline {
         /// Makes Everest start to load the texture, if it hasn't already been doing so before.
         /// </summary>
         public void TriggerTextureLoad() {
-            if(VirtualTexture__Texture_QueuedLoadLock == null) {
-                //We're in the future! Hopefully Everest's FTL / lazy texture loading code is a bit less messy now...
-                //TODO Correctly deal with the utopia
-                return;
-            }
-
             MainThreadHelper.Do(() => {
-                //Check if the texture has already loaded
-                if((!Texture?.IsDisposed) ?? false) return;
+                if(IsDisposed) return;
+                if(IsLoading || HasLoaded) return;
 
-                //Check if a load has already been triggered
-                if(VirtualTexture__Texture_QueuedLoadLock.GetValue(VirtualTexture) != null) return;
-
-                //Reload the texture to trigger a load, don't set _Texture_Requesting to do so asynchronously
+                //Don't set _Texture_Requesting to load asynchronously
                 VirtualTexture.Reload();
             });
         }
@@ -315,7 +306,8 @@ namespace Celeste.Mod.Procedurline {
         /// </summary>
         public void ShortCircuitTextureLoad() {
             MainThreadHelper.Do(() => {
-                if(Texture != null || IsLoading) return;
+                if(IsDisposed) return;
+                if(IsLoading || HasLoaded) return;
                 VirtualTexture.Texture = new Texture2D(Celeste.Instance.GraphicsDevice, Width, Height, false, SurfaceFormat.Color);
             });
         }
@@ -327,7 +319,26 @@ namespace Celeste.Mod.Procedurline {
             get {
                 lock(LOCK) {
                     if(IsDisposed) throw new ObjectDisposedException("TextureHandle");
+
+                    if(VirtualTexture__Texture_QueuedLoadLock == null) {
+                        //We're in the future! Hopefully Everest's FTL / lazy texture loading code is a bit less messy now...
+                        //TODO Correctly deal with the utopia
+                        return false;
+                    }
+
                     return VirtualTexture__Texture_QueuedLoadLock.GetValue(vtex) != null;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Checks if the texture has finished being loaded by Everest
+        /// </summary>
+        public bool HasLoaded {
+            get {
+                lock(LOCK) {
+                    if(IsDisposed) throw new ObjectDisposedException("TextureHandle");
+                    return !(Texture?.IsDisposed ?? true); 
                 }
             }
         }
