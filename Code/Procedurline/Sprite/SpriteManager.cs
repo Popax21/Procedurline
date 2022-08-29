@@ -234,7 +234,8 @@ namespace Celeste.Mod.Procedurline {
                         AtlasPath = animFrames[i].AtlasPath,
                         DrawOffset = animFrames[i].DrawOffset,
                         Width = animFrames[i].Width,
-                        Height = animFrames[i].Height
+                        Height = animFrames[i].Height,
+                        Scale = animFrames[i].ScaleFix
                     };
                 }
 
@@ -292,7 +293,9 @@ namespace Celeste.Mod.Procedurline {
                 }
 
                 for(int i = 0; i < frameRects.Length; i++) {
-                    anim.Frames[i] = new MTexture(heapTex.MTexture, animData.Frames[i].AtlasPath, frameRects[i], animData.Frames[i].DrawOffset, animData.Frames[i].Width, animData.Frames[i].Height);
+                    anim.Frames[i] = new MTexture(heapTex.MTexture, animData.Frames[i].AtlasPath, frameRects[i], animData.Frames[i].DrawOffset, animData.Frames[i].Width, animData.Frames[i].Height) {
+                        ScaleFix = animData.Frames[i].Scale
+                    };
                 }
 
                 if(texHandle != null) texHandle.Data = heapTex;
