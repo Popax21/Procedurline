@@ -5,13 +5,13 @@ using Monocle;
 namespace Celeste.Mod.Procedurline.Demo {
     public class SimpleBooster : CustomBooster {
         private class MyProcessor : IDisposable, IDataProcessor<Sprite, string, SpriteAnimationData> {
-            //Procedurline is multithreaded, so we have to utilize proper locking
+            //Procedurline is multithreaded, so we have to ensure we have a proper locking scheme
             public readonly object LOCK = new object();
             private DataScope dataScope, activeScope;
             private bool isActive;
 
             public MyProcessor() {
-                //We can make this scope transparent, as we'll always add it - it does not affect anything
+                //We can make this scope transparent, as we'll always register it - it does not affect anything
                 dataScope = new DataScope("pldemo-my-processor") { Transparent = true };
 
                 //The active scope however has to be non-transparent - the sprite is treated differently when it has the scope, compared to when it hasn't
