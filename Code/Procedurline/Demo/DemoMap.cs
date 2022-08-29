@@ -1,11 +1,11 @@
 using System;
+using System.Text;
 using System.Reflection;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 
 using Mono.Cecil.Cil;
 using MonoMod.Cil;
-using System.Text;
 
 namespace Celeste.Mod.Procedurline.Demo {
     public static class DemoMap {
@@ -32,6 +32,8 @@ namespace Celeste.Mod.Procedurline.Demo {
             level.Entities.Add(new DemoBooster(new Vector2(entityX + 4f * 8, entityY)));
             level.Entities.Add(new DemoRefill(new Vector2(entityX + 8f * 8, entityY)));
             level.Entities.Add(new DemoDreamBlock(new Vector2(entityX + 12f * 8, entityY), 8f * 8, 4f * 8));
+            level.Entities.Add(new SimpleRefill(new Vector2(entityX + 24f * 8, entityY)));
+            level.Entities.Add(new SimpleBooster(new Vector2(entityX + 28f * 8, entityY)));
         }
 
         [ContentILHook("Celeste.Mod.UI.OuiHelper_ChapterSelect_LevelSet", "Enter", true)]
