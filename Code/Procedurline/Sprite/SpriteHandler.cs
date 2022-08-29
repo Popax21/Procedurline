@@ -244,8 +244,10 @@ namespace Celeste.Mod.Procedurline {
                         (Math.Max(r.Top, vr.Top) - Math.Min(r.Bottom, vr.Bottom))
                     ;
 
-                    foreach((SpriteHandler ps, Rectangle pr) in (rects ?? nrects)) {
-                        if(ps == this) continue;
+                    foreach(KeyValuePair<SpriteHandler, Rectangle> kv in (rects ?? nrects)) {
+                        if(kv.Key == this) continue;
+                        Rectangle pr = kv.Value;
+
                         if(pr.Intersects(r)) score -=
                             (Math.Max(r.Left, pr.Left) - Math.Min(r.Right, pr.Right)) *
                             (Math.Max(r.Top, pr.Top) - Math.Min(r.Bottom, pr.Bottom))
