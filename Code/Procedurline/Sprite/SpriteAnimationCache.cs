@@ -52,7 +52,7 @@ namespace Celeste.Mod.Procedurline {
         protected override DataScopeKey CreateKey(Sprite target) {
             string id = ProcedurlineModule.SpriteManager.GetSpriteID(target);
             if(id == null) return null;
-            return new SpriteScopeKey(id);
+            return new SpriteScopeKey(id, false);
         }
 
         protected override AsyncDataProcessorCache<Sprite, string, Sprite.Animation>.ScopedCache CreateScopedData(DataScopeKey key) => new ScopedCache(this, (SpriteScopeKey) key);

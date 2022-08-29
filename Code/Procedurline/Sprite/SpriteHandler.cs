@@ -38,7 +38,7 @@ namespace Celeste.Mod.Procedurline {
             SpriteID = spriteId;
             OwnedByManager = ownedByManager;
 
-            ScopeKey = new DataScopeKey(true);
+            ScopeKey = new DataScopeKey();
             ScopeKey.OnInvalidate += ScopeInvalidated;
 
             //If the sprite is a custom sprite, register it

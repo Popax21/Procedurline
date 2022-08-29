@@ -6,7 +6,8 @@ namespace Celeste.Mod.Procedurline {
     /// </summary>
     public class SpriteScopeKey : DataScopeKey {
         public readonly string SpriteID;
-        public SpriteScopeKey(string spriteId) => SpriteID = spriteId;
+
+        public SpriteScopeKey(string spriteId, bool invalOnRegistrarInval = true) : base(invalOnRegistrarInval) => SpriteID = spriteId;
 
         public override bool Equals(DataScopeKey other) => other is SpriteScopeKey spriteKey && base.Equals(other) && SpriteID.Equals(spriteKey.SpriteID, StringComparison.OrdinalIgnoreCase);
         public override int GetHashCode() => unchecked(base.GetHashCode() * 31 + SpriteID.ToLower().GetHashCode());

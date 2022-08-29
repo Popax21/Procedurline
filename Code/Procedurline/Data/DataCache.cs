@@ -78,6 +78,7 @@ namespace Celeste.Mod.Procedurline {
 
                             return cache.GetOrAdd(key, _ => {
                                 D data = CreateScopedData(key);
+                                key.TakeOwnership(data);
                                 key.OnInvalidate += KeyInvalidated;
                                 key = null; //Don't dispose the key
                                 return data;
@@ -94,9 +95,7 @@ namespace Celeste.Mod.Procedurline {
             DataScopeKey key = (DataScopeKey) inval;
 
             //Remove the key's scoped data from the cache
-            D data = null;
-            lock(LOCK) cache.TryRemove(key, out data);
-            data?.Dispose();
+            lock(LOCK) cache.TryRemove(key, out _);
 
             key.Dispose();
         }
@@ -108,7 +107,7 @@ namespace Celeste.Mod.Procedurline {
         /// <returns>
         /// <c>null</c> if the target shouldn't have any associated scoped data
         /// </returns>
-        protected virtual DataScopeKey CreateKey(T target) => new DataScopeKey();
+        protected virtual DataScopeKey CreateKey(T target) => new DataScopeKey(false);
 
         /// <summary>
         /// Creates new scoped data for a specified cache key

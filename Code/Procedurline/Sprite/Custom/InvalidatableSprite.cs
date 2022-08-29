@@ -103,7 +103,7 @@ namespace Celeste.Mod.Procedurline {
         private CancellationTokenSource tokenSrc;
 
         protected InvalidatableSprite(string spriteId, Atlas atlas, string path) : base(spriteId, atlas, path) {
-            ScopeKey = new DataScopeKey(true);
+            ScopeKey = new DataScopeKey();
             ScopeKey.OnInvalidate += OnInvalidate;
         }
 

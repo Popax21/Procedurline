@@ -49,8 +49,10 @@ namespace Celeste.Mod.Procedurline {
         private List<IDisposable> ownedObjects = new List<IDisposable>();
         private bool ownsSelf = false;
 
-        public DataScopeKey() => Reset();
-        public DataScopeKey(bool invalOnRegistrarInval) : this() => InvalidateOnRegistrarInvalidation = invalOnRegistrarInval;
+        public DataScopeKey(bool invalOnRegistrarInval = true) {
+            InvalidateOnRegistrarInvalidation = invalOnRegistrarInval;
+            Reset();
+        }
 
         /// <summary>
         /// Disposes the scope key. This effectively performs a call to <see cref="Invalidate" /> before destryoing the key.
@@ -87,7 +89,7 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
-        /// Clones the scope key, returning an almost identical copy of it. The cloned key will not own any objects the original key took ownership of using <see cref="TakeOwnership" />, and have <see cref="InvalidateOnRegistrarInvalidation" /> set to <c>false</c>.
+        /// Clones the scope key, returning an almost identical copy of it. The cloned key will not own any objects the original key took ownership of using <see cref="TakeOwnership" />, and have <see cref="InvalidateOnRegistrarInvalidation" /> set to <c>true</c>.
         /// </summary>
         public virtual DataScopeKey Clone() {
             DataScopeKey key = new DataScopeKey();
