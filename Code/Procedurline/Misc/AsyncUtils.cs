@@ -55,7 +55,7 @@ namespace Celeste.Mod.Procedurline {
 
             TaskCompletionSource<int> taskSrc = new TaskCompletionSource<int>();
 
-            task.ContinueWith(t => {
+            task.ContinueWithOrInvoke(t => {
                 if(t.Status == TaskStatus.RanToCompletion) taskSrc.TrySetResult(1234);
                 else if(t.Status == TaskStatus.Canceled) taskSrc.TrySetCanceled();
                 else taskSrc.TrySetException(t.Exception);
@@ -63,7 +63,7 @@ namespace Celeste.Mod.Procedurline {
             if(task.IsCompleted) return task;
 
             CancellationTokenRegistration reg = token.Register(() => taskSrc.TrySetCanceled(token));
-            taskSrc.Task.ContinueWith(_ => reg.Dispose());
+            taskSrc.Task.ContinueWithOrInvoke(_ => reg.Dispose());
 
             return taskSrc.Task;
         }
@@ -76,7 +76,7 @@ namespace Celeste.Mod.Procedurline {
 
             TaskCompletionSource<T> taskSrc = new TaskCompletionSource<T>();
 
-            task.ContinueWith(t => {
+            task.ContinueWithOrInvoke(t => {
                 if(t.Status == TaskStatus.RanToCompletion) taskSrc.TrySetResult(t.Result);
                 else if(t.Status == TaskStatus.Canceled) taskSrc.TrySetCanceled();
                 else taskSrc.TrySetException(t.Exception);
@@ -84,7 +84,7 @@ namespace Celeste.Mod.Procedurline {
             if(task.IsCompleted) return task;
 
             CancellationTokenRegistration reg = token.Register(() => taskSrc.TrySetCanceled(token));
-            taskSrc.Task.ContinueWith(_ => reg.Dispose());
+            taskSrc.Task.ContinueWithOrInvoke(_ => reg.Dispose());
 
             return taskSrc.Task;
         }
