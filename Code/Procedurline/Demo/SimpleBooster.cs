@@ -14,7 +14,7 @@ namespace Celeste.Mod.Procedurline.Demo {
                 //We can make this scope transparent, as we'll always register it - it does not affect anything
                 dataScope = new DataScope("pldemo-my-processor") { Transparent = true };
 
-                //The active scope however has to be non-transparent - the sprite is treated differently when it has the scope, compared to when it hasn't
+                //The active scope however has to be non-transparent - the sprite is treated differently when it has the scope, compared to when it doesn't have it
                 activeScope = new DataScope("pldemo-my-processor-active");
             }
 
@@ -30,7 +30,7 @@ namespace Celeste.Mod.Procedurline.Demo {
                     dataScope.RegisterKey(key);
 
                     //We want to have a seperate scope for when our processor is active, so if we are active, register it
-                    //As the active scope is non-transparent, Procedurline nows that our booster has different animation data when it has this scope, compared to when it hasn't
+                    //As the active scope is non-transparent, Procedurline knows that our booster has different animation data when it has this scope, compared to when it hasn't
                     if(isActive) activeScope.RegisterKey(key);
                 }
             }
@@ -38,7 +38,7 @@ namespace Celeste.Mod.Procedurline.Demo {
             public bool ProcessData(Sprite target, DataScopeKey key, string id, ref SpriteAnimationData data) {
                 //Figure out if our processor should be active
                 //Because of race conditions, our active flag might have changed since we first registered our scope
-                //So if we have a key, check if our scope is registered on it instead, otherwise fall back to our active flag
+                //So if we have a key, check if our scope is registered on it, otherwise fall back to the current active flag value
                 bool shouldProcess;
                 if(key != null) shouldProcess = key.IsRegistered(activeScope);
                 else {
@@ -47,7 +47,7 @@ namespace Celeste.Mod.Procedurline.Demo {
 
                 if(!shouldProcess) return false;
 
-                //Process the given sprite
+                //Process the sprite
                 //Care should be taken that data isn't null, which is the case when the animation didn't exist
                 //Procedurline still processes the animation to allow processors to "inject" a new animation
                 if(data == null) return false;
@@ -74,7 +74,7 @@ namespace Celeste.Mod.Procedurline.Demo {
                     frame.TextureData = downscaledFrame;
 
                     //We have to upscale our now downscaled frame to ensure it remains the same size
-                    //Even though MTextures have a Width / Height property we can control, it's not used for anything
+                    //Even though MTextures have a Width / Height property we can control, it's not used for rendering
                     frame.Scale *= 2;
                 }
                 return true;
@@ -111,6 +111,10 @@ namespace Celeste.Mod.Procedurline.Demo {
             myProc = dispPool.Add(new MyProcessor());
 
             //Create a new derived sprite using our custom processor
+            //Normally, you would only create one instance you store in a global variable, and then clone for every sprite
+            //But as we're gonna change the way the sprite's processed, we have to have a new sprite instance per entity
+            //This also means any cached data is only valid for this sprite
+            //So usually, one would use a SpriteMultiplexer to achieve this effect, but the intend of this example is to show how do it from scratch
             //DerivedSprite expects an asynchronous data processor, so we have to wrap it first
             return dispPool.Add(new DerivedSprite("pldemo-my-booster", origSprite, myProc.WrapAsync()));
         }

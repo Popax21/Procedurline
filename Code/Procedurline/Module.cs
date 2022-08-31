@@ -25,7 +25,7 @@ namespace Celeste.Mod.Procedurline {
         private SpriteManager spriteManager;
         private PlayerManager playerManager;
 
-        private DataScope globalScope, sceneScope, levelScope, spriteScope, dynamicScope, playerScope;
+        private DataScope globalScope, sceneScope, levelScope, spriteScope, playerScope, dynamicScope;
 
         public override void Load() {
             dispPool = new DisposablePool();
@@ -41,8 +41,8 @@ namespace Celeste.Mod.Procedurline {
             sceneScope = dispPool.Add(new DataScope("$SCENE"));
             levelScope = dispPool.Add(new DataScope("$LEVEL"));
             spriteScope = dispPool.Add(new DataScope("$SPRITE"));
-            dynamicScope = dispPool.Add(new DataScope("$DYNAMIC"));
             playerScope = dispPool.Add(new DataScope("$PLAYER"));
+            dynamicScope = dispPool.Add(new DataScope("$DYNAMIC"));
 
             //Apply content hooks and patches
             foreach(Type type in typeof(ProcedurlineModule).Assembly.GetTypes()) {
@@ -125,8 +125,8 @@ namespace Celeste.Mod.Procedurline {
         public static DataScope SceneScope => Instance?.sceneScope;
         public static DataScope LevelScope => Instance?.levelScope;
         public static DataScope SpriteScope => Instance?.spriteScope;
-        public static DataScope DynamicScope => Instance?.dynamicScope;
         public static DataScope PlayerScope => Instance?.playerScope;
+        public static DataScope DynamicScope => Instance?.dynamicScope;
 
         [Command("pl_invlscope", "Invalidates the specified Procedurline data scope (default: $GLOBAL)")]
         private static void INVLGLBL(string scope) {
@@ -135,8 +135,8 @@ namespace Celeste.Mod.Procedurline {
                 case "$SCENE": SceneScope?.Invalidate(); break;
                 case "$LEVEL": LevelScope?.Invalidate(); break;
                 case "$SPRITE": SpriteScope?.Invalidate(); break;
-                case "$DYNAMIC": DynamicScope?.Invalidate(); break;
                 case "$PLAYER": PlayerScope?.Invalidate(); break;
+                case "$DYNAMIC": DynamicScope?.Invalidate(); break;
                 default: Celeste.Commands.Log("Unknown scope!"); break;
             }
         }
