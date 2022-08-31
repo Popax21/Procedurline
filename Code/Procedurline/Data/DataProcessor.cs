@@ -13,8 +13,8 @@ namespace Celeste.Mod.Procedurline {
         /// <summary>
         /// Processes and modifies data for a specified target. Returns false if it it didn't modify the data.
         /// All data with the same key and ID MUST be processed the same way, or e.g. <see cref="DataProcessorCache{T, I, D}" /> will stop working.
-        /// DO NOT change your behaviour based on target attributes not encapsulated by different scopes.
-        /// If <paramref name="key" /> is <c>null</c>, then the above doesn't apply - your code is free to do whatever it wants to. Callers musn't cache the returned data if they don't provide a key.
+        /// DO NOT change your behaviour based on (target) attributes not encapsulated by different scopes.
+        /// If <paramref name="key" /> is <c>null</c>, then the above doesn't apply - your code is free to do whatever it wants to. Callers musn't cache the returned data if they did't register a key using <see cref="IScopeRegistrar{T}.RegisterScopes" /> first.
         /// </summary>
         /// <returns>
         /// Returns <c>false</c> if data wasn't modified

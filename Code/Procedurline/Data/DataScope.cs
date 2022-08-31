@@ -15,18 +15,7 @@ namespace Celeste.Mod.Procedurline {
         internal LinkedList<DataScopeKey> registeredKeys = new LinkedList<DataScopeKey>();
         internal bool transparent;
 
-        /// <summary>
-        /// Holds the entry which will be added to <see cref="DataScopeKey" />'s <see cref="DataScopeKey.DataStore" /> once the scope is registered on them. This mechanism can be used to efficiently store auxiliary data together with a given scope.
-        /// </summary>
-        public readonly DictionaryEntry? DataStoreEntry;
-
-        /// <summary>
-        /// If <paramref name="name" /> is <c>null</c>, the scope is a so called "anonymous scope". These scopes aren't explicitly listed in debug views.
-        /// </summary>
-        public DataScope(string name, DictionaryEntry? storeEntry = null) {
-            Name = name;
-            DataStoreEntry = storeEntry;
-        }
+        public DataScope(string name) => Name = name;
 
         public virtual void Dispose() {
             LinkedList<DataScopeKey> invalKeys = null;

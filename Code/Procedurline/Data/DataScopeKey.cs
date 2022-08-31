@@ -41,11 +41,6 @@ namespace Celeste.Mod.Procedurline {
         internal bool isInvalidating;
         private bool isValid;
 
-        /// <summary>
-        /// Contains the dictionary used to store scope data entries. These entries can be used to store auxiliary data along with data keys, which can then be efficiently queried by e.g. data processors.
-        /// </summary>
-        public readonly ConcurrentDictionary<object, object> DataStore = new ConcurrentDictionary<object, object>();
-
         private List<IDisposable> ownedObjects = new List<IDisposable>();
         private bool ownsSelf = false;
 
@@ -148,13 +143,6 @@ namespace Celeste.Mod.Procedurline {
                     //Yes, using XORs for hashing is usually not a good idea, but we have to ensure that no matter the order of scopes registration, the same hash code is returned
                     hashCode = unchecked(hashCode ^ scope.GetHashCode());
                 }
-
-                //If the scope has a data store entry, add it to the key's store
-                if(scope.DataStoreEntry is DictionaryEntry entry) {
-                    if(!DataStore.TryAdd(entry.Key, entry.Value)) {
-                        Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"DataScopeKey auxiliary data store key conflict for key '{entry.Key}' [type {entry.Key.GetType()}]!");
-                    }
-                }
             }
             return true;
         }
@@ -218,8 +206,6 @@ namespace Celeste.Mod.Procedurline {
                 isInvalidating = false;
                 isValid = true;
                 hashCode = HASH_MAGIC;
-
-                DataStore.Clear();
 
                 //Dispose owned objects
                 foreach(IDisposable obj in ownedObjects) obj.Dispose();

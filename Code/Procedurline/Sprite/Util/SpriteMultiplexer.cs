@@ -17,7 +17,7 @@ namespace Celeste.Mod.Procedurline {
                 base.RegisterScopes(target, key);
 
                 //If the sprite is a CustomSprite, register its scopes
-                if(sprites[MuxIndex] is CustomSprite customSprite) customSprite.RegisterScopes(key);
+                if(this[MuxIndex] is CustomSprite customSprite) customSprite.RegisterScopes(key);
             }
         }
 
@@ -25,12 +25,8 @@ namespace Celeste.Mod.Procedurline {
             lock(LOCK) {
                 if(IsDisposed) throw new ObjectDisposedException("SpriteMultiplexer");
 
-                //Get the sprite index
-                int spriteIdx = (key != null) ? GetScopeKeyMuxIndex(key) : MuxIndex;
-                if(spriteIdx < 0) return false;
-
                 //Replace with the sprite's animation
-                Sprite.Animation muxAnim = sprites[spriteIdx]?.GetOriginalAnimation(id);
+                Sprite.Animation muxAnim = this[MuxIndex]?.GetOriginalAnimation(id);
                 if(anim == muxAnim) return false;
                 anim = muxAnim;
                 return true;

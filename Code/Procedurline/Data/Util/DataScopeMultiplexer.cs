@@ -20,14 +20,13 @@ namespace Celeste.Mod.Procedurline {
         public readonly int Count;
         public readonly DataScope MuxScope;
         public readonly DataScope[] IndexScopes;
-        private readonly object indexStoreKey = new object();
 
         protected DataScopeMultiplexer(string name, int count) {
             //Create data scopes
             Count = count;
             MuxScope = new DataScope(name) { Transparent = true };
             IndexScopes = new DataScope[count];
-            for(int i = 0; i < count; i++) IndexScopes[i] = new DataScope((name != null) ? $"{name}[{i}]" : null, new DictionaryEntry(indexStoreKey, i));
+            for(int i = 0; i < count; i++) IndexScopes[i] = new DataScope((name != null) ? $"{name}[{i}]" : null);
         }
 
         public void Dispose() {
@@ -49,14 +48,6 @@ namespace Celeste.Mod.Procedurline {
                 MuxScope.RegisterKey(key);
                 IndexScopes[curIdx].RegisterKey(key);
             }
-        }
-
-        /// <summary>
-        /// Gets the <see cref="DataScopeKey" />'s registered multiplexing index, or <c>-1</c> if no index is registered
-        /// </summary>
-        public int GetScopeKeyMuxIndex(DataScopeKey key) {
-            if(!key.DataStore.TryGetValue(indexStoreKey, out object idxObj)) return -1;
-            return (int) idxObj;
         }
 
         /// <summary>
@@ -107,14 +98,8 @@ namespace Celeste.Mod.Procedurline {
 
         public virtual bool ProcessData(T target, DataScopeKey key, I id, ref D data) {
             lock(LOCK) {
-                if(IsDisposed) throw new ObjectDisposedException("DataProcessorMultiplexer");
-
-                //Get processor index
-                int procIdx = (key != null) ? GetScopeKeyMuxIndex(key) : MuxIndex;
-                if(procIdx < 0) return false;
-
                 //Forward to processor
-                return this[procIdx]?.ProcessData(target, key, id, ref data) ?? false;
+                return this[MuxIndex]?.ProcessData(target, key, id, ref data) ?? false;
             }
         }
 
@@ -164,14 +149,8 @@ namespace Celeste.Mod.Procedurline {
 
         public Task<bool> ProcessDataAsync(T target, DataScopeKey key, I id, AsyncRef<D> data, CancellationToken token = default) {
             lock(LOCK) {
-                if(IsDisposed) throw new ObjectDisposedException("AsyncDataProcessorMultiplexer");
-
-                //Get processor index
-                int procIdx = (key != null) ? GetScopeKeyMuxIndex(key) : MuxIndex;
-                if(procIdx < 0) return Task.FromResult(false);
-
                 //Forward to processor
-                return this[procIdx]?.ProcessDataAsync(target, key, id, data, token) ?? Task.FromResult(false);
+                return this[MuxIndex]?.ProcessDataAsync(target, key, id, data, token) ?? Task.FromResult(false);
             }
         }
 

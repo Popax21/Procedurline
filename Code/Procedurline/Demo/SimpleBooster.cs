@@ -36,16 +36,10 @@ namespace Celeste.Mod.Procedurline.Demo {
             }
 
             public bool ProcessData(Sprite target, DataScopeKey key, string id, ref SpriteAnimationData data) {
-                //Figure out if our processor should be active
-                //Because of race conditions, our active flag might have changed since we first registered our scope
-                //So if we have a key, check if our scope is registered on it, otherwise fall back to the current active flag value
-                bool shouldProcess;
-                if(key != null) shouldProcess = key.IsRegistered(activeScope);
-                else {
-                    lock(LOCK) shouldProcess = isActive;
+                //Check if the processor should be active
+                lock(LOCK) {
+                    if(!isActive) return false;
                 }
-
-                if(!shouldProcess) return false;
 
                 //Process the sprite
                 //Care should be taken that data isn't null, which is the case when the animation didn't exist
