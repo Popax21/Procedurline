@@ -13,6 +13,8 @@ namespace Celeste.Mod.Procedurline {
         private LinkedListNode<TextureOwner> scopeNode = null;
 
         public TextureOwner(string name, TextureScope scope) {
+            scope ??= ProcedurlineModule.TextureManager?.GlobalScope;
+
             Name = name;
             Scope = scope;
 

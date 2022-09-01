@@ -13,23 +13,9 @@ using Monocle;
 
 namespace Celeste.Mod.Procedurline {
     /// <summary>
-    /// Manages texture creation / lifecycle / data upload / etc.
+    /// Manages texture creation / lifecycle / data download and upload / etc.
     /// </summary>
     public sealed class TextureManager : GameComponent {
-        private struct TextureDataAction {
-            public enum Action {
-                DOWNLOAD, UPLOAD
-            }
-
-            public TaskCompletionSource<Texture2D> taskSrc;
-            public CancellationToken taskToken;
-
-            public TextureHandle texture;
-            public TextureData data;
-            public Action action;
-        }
-
-        private LinkedList<TextureDataAction> dataActionQueue = new LinkedList<TextureDataAction>();
         public readonly TextureScope GlobalScope;
         public readonly TextureScope UnownedScope;
         public readonly TextureScope DerivedScope;
@@ -76,38 +62,6 @@ namespace Celeste.Mod.Procedurline {
             base.Dispose(disposing);
         }
 
-        public override void Update(GameTime gameTime) {
-            base.Update(gameTime);
-
-            //Do pending texture data actions
-            lock(dataActionQueue) {
-                for(LinkedListNode<TextureDataAction> node = dataActionQueue.First, nnode = node?.Next; node != null; node = nnode, nnode = node?.Next) {
-                    TextureDataAction action = node.Value;
-
-                    if(action.texture.IsDisposed) {
-                        action.taskSrc.SetException(new ObjectDisposedException("TextureHandle"));
-                    } else {
-                        Texture2D tex = action.texture.Texture;
-                        if(tex == null || action.texture.IsLoading) continue;
-
-                        //Execute the pending action
-                        try {
-                            action.taskToken.ThrowIfCancellationRequested();
-                            switch(action.action) {
-                                case TextureDataAction.Action.DOWNLOAD: action.data.DownloadData(tex); break;
-                                case TextureDataAction.Action.UPLOAD: action.data.UploadData(tex); break;
-                            }
-                            action.taskSrc.SetResult(tex);
-                        } catch(Exception e) {
-                            action.taskSrc.SetException(e);
-                        }
-                    }
-    
-                    dataActionQueue.Remove(node);
-                }
-            }
-        }
-
         /// <summary>
         /// Gets the <see cref="TextureHandle" /> for a <see cref="VirtualTexture" />
         /// </summary>
@@ -133,46 +87,38 @@ namespace Celeste.Mod.Procedurline {
         /// Downloads the data from the given <see cref="TextureHandle"/>'s texture into the specified <see cref="TextureData"/> buffer.
         /// <b>NOTE: It's recommended to use <see cref="TextureHandle.GetTextureData"/> instead, as it caches the texture's data</b>
         /// </summary>
-        public Task<Texture2D> DownloadData(TextureHandle texh, TextureData data, CancellationToken token = default) {
+        public async Task DownloadData(TextureHandle texh, TextureData data, CancellationToken token = default) {
             token.ThrowIfCancellationRequested();
 
             //Trigger a texture load
             texh.TriggerTextureLoad();
 
-            //Enqueue the action
-            TaskCompletionSource<Texture2D> taskSrc = new TaskCompletionSource<Texture2D>();
-            lock(dataActionQueue) dataActionQueue.AddLast(new TextureDataAction() {
-                taskSrc = taskSrc,
-                taskToken = token,
-
-                texture = texh,
-                data = data,
-                action = TextureDataAction.Action.DOWNLOAD
-            });
-            return taskSrc.Task;
+            //Wait for an opportunity to execute the download
+            while(!(await ProcedurlineModule.GlobalManager.MainThreadTaskFactory.StartNew(() => {
+                Texture2D tex = texh.Texture;
+                if(tex == null || texh.IsLoading) return false;
+                data.DownloadData(tex);
+                return true;
+            }, GlobalManager.ForceQueue)));
         }
 
         /// <summary>
         /// Uploads the data from the given <see cref="TextureData"/> buffer into the specified <see cref="TextureHandle"/>'s texture.
         /// <b>NOTE: It's recommended to use <see cref="TextureHandle.SetTextureData"/> instead, as it caches the texture's data</b>
         /// </summary>
-        public Task<Texture2D> UploadData(TextureHandle texh, TextureData data, CancellationToken token = default) {
+        public async Task UploadData(TextureHandle texh, TextureData data, CancellationToken token = default) {
             token.ThrowIfCancellationRequested();
 
             //Short circuit texture loading if possible
             texh.ShortCircuitTextureLoad();
 
-            //Enqueue the action
-            TaskCompletionSource<Texture2D> taskSrc = new TaskCompletionSource<Texture2D>();
-            lock(dataActionQueue) dataActionQueue.AddLast(new TextureDataAction() {
-                taskSrc = taskSrc,
-                taskToken = token,
-
-                texture = texh,
-                data = data,
-                action = TextureDataAction.Action.UPLOAD,
-            });
-            return taskSrc.Task;
+            //Wait for an opportunity to execute the upload
+            while(!(await ProcedurlineModule.GlobalManager.MainThreadTaskFactory.StartNew(() => {
+                Texture2D tex = texh.Texture;
+                if(tex == null || texh.IsLoading) return false;
+                data.UploadData(tex);
+                return true;
+            }, GlobalManager.ForceQueue)));
         }
 
         private void VTexReloadHook(On.Monocle.VirtualTexture.orig_Reload orig, VirtualTexture tex) {

@@ -89,7 +89,7 @@ namespace Celeste.Mod.Procedurline {
 
             //Install hooks
             using(new DetourContext(ProcedurlineModule.HOOK_PRIO)) {
-                IL.Monocle.Engine.Update += EngineUpdateModifier;
+                On.Monocle.Engine.Update += EngineUpdateHook;
                 On.Monocle.Engine.Draw += EngineDrawHook;
                 On.Monocle.Scene.End += SceneEndHook;
                 On.Celeste.Level.Reload += LevelReloadHook;
@@ -98,7 +98,7 @@ namespace Celeste.Mod.Procedurline {
 
         protected override void Dispose(bool disposing) {
             //Remove hooks
-            IL.Monocle.Engine.Update -= EngineUpdateModifier;
+            On.Monocle.Engine.Update -= EngineUpdateHook;
             On.Monocle.Engine.Draw -= EngineDrawHook;
 
             Game.Components.Remove(this);
@@ -113,40 +113,20 @@ namespace Celeste.Mod.Procedurline {
             lock(blockingTasks) blockingTasks.AddLast(task);
         }
 
-        private void EngineUpdateModifier(ILContext ctx) {
-            ILCursor cursor = new ILCursor(ctx);
+        private void EngineUpdateHook(On.Monocle.Engine.orig_Update orig, Monocle.Engine engine, GameTime time) {
+            //Allow the main thread scheduler to execute tasks
+            MainThreadScheduler.RunTasks();
 
-            cursor.EmitDelegate<Func<bool>>(() => {
-                //Allow the main thread scheduler to execute tasks
-                MainThreadScheduler.RunTasks();
-
-                //Check if all blocking tasks have completed
-                lock(blockingTasks) {
-                    for(LinkedListNode<Task> node = blockingTasks.First, nnode = node?.Next; node != null; node = nnode, nnode = node?.Next) {
-                        if(node.Value.IsCompleted) {
-                            blockingTasks.Remove(node);
-                        } else {
-                            //Invoke base.Update()
-                            return false;
-                        }
-                    }
+            //Check if all blocking tasks have completed
+            lock(blockingTasks) {
+                for(LinkedListNode<Task> node = blockingTasks.First, nnode = node?.Next; node != null; node = nnode, nnode = node?.Next) {
+                    if(node.Value.IsCompleted) {
+                        blockingTasks.Remove(node);
+                    } else return;
                 }
+            }
 
-                //Continue like usual
-                return true;
-            });
-
-            //Check if we should call base.Update
-            ILLabel continueLabel = cursor.DefineLabel();
-            cursor.Emit(OpCodes.Brtrue, continueLabel);
-
-            //Call base.Update()
-            cursor.Emit(OpCodes.Ldarg_0);
-            cursor.Emit(OpCodes.Ldarg_1);
-            cursor.Emit(OpCodes.Call, typeof(Game).GetMethod("Update", PatchUtils.BindAllInstance));
-            cursor.Emit(OpCodes.Ret);
-
-            cursor.MarkLabel(continueLabel);
+            orig(engine, time);
         }
 
         private void EngineDrawHook(On.Monocle.Engine.orig_Draw orig, Monocle.Engine engine, GameTime time) {
