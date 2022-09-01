@@ -115,15 +115,10 @@ namespace Celeste.Mod.Procedurline {
         }
 
         private PlayerSpriteAnimationFrameData? GetPlayerSpriteFrame(PlayerSprite sprite) {
-            if(!string.IsNullOrEmpty(sprite.CurrentAnimationID)) {
-                if(!sprite.Animations.TryGetValue(sprite.CurrentAnimationID, out Sprite.Animation anim) || !(anim is PlayerSpriteAnimation panim) || panim.PlayerFrameData == null) return null;
-                if(sprite.CurrentAnimationFrame < 0 || panim.PlayerFrameData.Length <= sprite.CurrentAnimationFrame) return null;
-                return panim.PlayerFrameData[sprite.CurrentAnimationFrame];
-            } else if(!string.IsNullOrEmpty(sprite.LastAnimationID)) {
-                if(!sprite.Animations.TryGetValue(sprite.LastAnimationID, out Sprite.Animation anim) || !(anim is PlayerSpriteAnimation panim) || panim.PlayerFrameData == null) return null;
-                if(panim.PlayerFrameData.Length <= panim.Frames.Length-1) return null;
-                return panim.PlayerFrameData[panim.Frames.Length-1];
-            } else return null;
+            string curAnim = sprite.CurrentAnimationID ?? sprite.LastAnimationID;
+            if(curAnim == null || !(sprite.GetProcessedAnimation(curAnim) is PlayerSpriteAnimation panim) || panim.PlayerFrameData == null) return null;
+            if(sprite.CurrentAnimationFrame < 0 || panim.PlayerFrameData.Length <= sprite.CurrentAnimationFrame) return null;
+            return panim.PlayerFrameData[panim.Frames.Length-1];
         }
 
         private void PlayerSpriteCtorHook(On.Celeste.PlayerSprite.orig_ctor orig, PlayerSprite sprite, PlayerSpriteMode mode) {
