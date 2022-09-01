@@ -1,6 +1,9 @@
 using System;
 
 namespace Celeste.Mod.Procedurline {
+    /// <summary>
+    /// A helper class which calls a callback every time a garbage collector generation occurs
+    /// </summary>
     public sealed class GCCallback : IDisposable {
         private class DanglingObject {
             private readonly GCCallback callback;
