@@ -19,15 +19,19 @@ namespace Celeste.Mod.Procedurline {
         /// </summary>
         public sealed class MainThreadTaskScheduler : TaskScheduler {
             private readonly LinkedList<Task> tasks = new LinkedList<Task>();
+            private LinkedListNode<Task> stopNode = null;
 
             public void RunTasks() {
                 if(!MainThreadHelper.IsMainThread) throw new InvalidOperationException("Not on main thread!");
+
+                //Reset the stop node
+                lock(tasks) stopNode = null;
 
                 while(true) {
                     //Dequeue a task
                     Task task;
                     lock(tasks) {
-                        if(tasks.Count <= 0) break;
+                        if(tasks.Last == stopNode) break;
                         task = tasks.First.Value;
                         tasks.RemoveFirst();
                     }
@@ -42,7 +46,18 @@ namespace Celeste.Mod.Procedurline {
             }
 
             protected override void QueueTask(Task task) {
-                lock(tasks) tasks.AddLast(task);
+                lock(tasks) {
+                    //Check if this is a ForceQueue task, and we're on the main thread
+                    if(MainThreadHelper.IsMainThread && (task.CreationOptions & ForceQueue) != 0) {
+                        //Update the stop node
+                        LinkedListNode<Task> node = tasks.AddLast(task);
+                        stopNode ??= node;
+                    } else {
+                        //Enqueue before the stop node
+                        if(stopNode != null) tasks.AddBefore(stopNode, task);
+                        else tasks.AddLast(task);
+                    }
+                }
             }
 
             protected override bool TryDequeue(Task task) {
@@ -51,6 +66,8 @@ namespace Celeste.Mod.Procedurline {
 
             protected override bool TryExecuteTaskInline(Task task, bool wasQueued) {
                 if(!MainThreadHelper.IsMainThread) return false;
+
+                //We can't inline ForceQueue tasks
                 if((task.CreationOptions & ForceQueue) != 0) return false;
 
                 if(wasQueued && !TryDequeue(task)) return false;
