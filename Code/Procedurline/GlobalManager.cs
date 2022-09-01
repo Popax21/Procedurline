@@ -122,7 +122,11 @@ namespace Celeste.Mod.Procedurline {
                 for(LinkedListNode<Task> node = blockingTasks.First, nnode = node?.Next; node != null; node = nnode, nnode = node?.Next) {
                     if(node.Value.IsCompleted) {
                         blockingTasks.Remove(node);
-                    } else return;
+                    } else {
+                        //Still update the main thread helper
+                        MainThreadHelper.Instance?.Update(time);
+                        return;
+                    }
                 }
             }
 
