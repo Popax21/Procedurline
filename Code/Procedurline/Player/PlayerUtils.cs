@@ -3,7 +3,7 @@ using Microsoft.Xna.Framework;
 using Monocle;
 
 namespace Celeste.Mod.Procedurline {
-    public static class PlayerTextureUtils {
+    public static class PlayerUtils {
         public static Color SKIN_COLOR = Calc.HexToColor("#d9a066");
         public static Color SKIN_HIGHLIGHT_COLOR = Calc.HexToColor("#eec39a");
         public static Color SHIRT_PRIMARY_COLOR = Calc.HexToColor("#5b6ee1");
@@ -42,7 +42,7 @@ namespace Celeste.Mod.Procedurline {
         /// <summary>
         /// Checks if the given partiton ID belongs to the player's face component.
         /// </summary>
-        public static bool IsFaceComponent(TexturePartitioning texPart, int partId) {
+        public static bool IsFaceComponent(this TexturePartitioning texPart, int partId) {
             int pxCount = 0;
             bool hasYPixel = false, hasHighlightPixel = false;
             for(int x = 0; x < texPart.Texture.Width; x++) {
@@ -51,7 +51,7 @@ namespace Celeste.Mod.Procedurline {
 
                     pxCount++;
                     hasYPixel |= (y <= MAX_FACE_Y);
-                    hasHighlightPixel |= (texPart.Texture[x,y] == PlayerTextureUtils.SKIN_HIGHLIGHT_COLOR);
+                    hasHighlightPixel |= (texPart.Texture[x,y] == PlayerUtils.SKIN_HIGHLIGHT_COLOR);
                     if(pxCount > 4 && hasYPixel && hasHighlightPixel) return true;
                 }
             }
