@@ -187,7 +187,7 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
-        private void GCCallback() => DoSweep();
+        private void GCCallback() => ProcedurlineModule.GlobalManager.MainThreadTaskFactory.StartNew(DoSweep, GlobalManager.ForceQueue);
         private void LevelLoadHandler(Level level, Player.IntroTypes intro, bool fromLoader) => DoSweep();
         private void SceneTransitionHook(On.Monocle.Engine.orig_OnSceneTransition orig, Monocle.Engine engine, Monocle.Scene from, Monocle.Scene to) {
             orig(engine, from, to);
