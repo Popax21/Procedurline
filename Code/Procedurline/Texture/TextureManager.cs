@@ -41,6 +41,7 @@ namespace Celeste.Mod.Procedurline {
             using(new DetourContext(ProcedurlineModule.HOOK_PRIO)) {
                 On.Monocle.VirtualTexture.Reload += VTexReloadHook;
                 On.Monocle.VirtualTexture.Unload += VTexUnloadHook;
+                ScaledMTexture.AddHooks();
             }
         }
 
@@ -48,6 +49,7 @@ namespace Celeste.Mod.Procedurline {
             //Remove hooks
             On.Monocle.VirtualTexture.Reload -= VTexReloadHook;
             On.Monocle.VirtualTexture.Unload -= VTexUnloadHook;
+            ScaledMTexture.RemoveHooks();
 
             //Dispose texture scopes
             UnownedScope?.Dispose();

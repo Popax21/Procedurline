@@ -68,7 +68,6 @@ namespace Celeste.Mod.Procedurline.Demo {
                     frame.TextureData = downscaledFrame;
 
                     //We have to upscale our now downscaled frame to ensure it remains the same size
-                    //Even though MTextures have a Width / Height property we can control, it's not used for rendering
                     frame.Scale *= 2;
                 }
                 return true;

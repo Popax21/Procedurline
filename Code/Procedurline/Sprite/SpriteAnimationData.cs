@@ -18,7 +18,8 @@ namespace Celeste.Mod.Procedurline {
             public string AtlasPath;
             public Vector2 DrawOffset;
             public int Width, Height;
-            public float Scale;
+            public Vector2 Scale;
+            public float ScaleFix;
         }
 
         public Chooser<string> Goto;

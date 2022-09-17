@@ -235,7 +235,8 @@ namespace Celeste.Mod.Procedurline {
                         DrawOffset = animFrames[i].DrawOffset,
                         Width = animFrames[i].Width,
                         Height = animFrames[i].Height,
-                        Scale = animFrames[i].ScaleFix
+                        Scale = (animFrames[i] is ScaledMTexture scaledMTex) ? scaledMTex.Scale : Vector2.One,
+                        ScaleFix = animFrames[i].ScaleFix
                     };
                 }
 
@@ -293,8 +294,9 @@ namespace Celeste.Mod.Procedurline {
                 }
 
                 for(int i = 0; i < frameRects.Length; i++) {
-                    anim.Frames[i] = new MTexture(heapTex.MTexture, animData.Frames[i].AtlasPath, frameRects[i], animData.Frames[i].DrawOffset, animData.Frames[i].Width, animData.Frames[i].Height) {
-                        ScaleFix = animData.Frames[i].Scale
+                    anim.Frames[i] = new ScaledMTexture(heapTex.MTexture, animData.Frames[i].AtlasPath, frameRects[i], animData.Frames[i].DrawOffset, animData.Frames[i].Width, animData.Frames[i].Height) {
+                        Scale = animData.Frames[i].Scale,
+                        ScaleFix = animData.Frames[i].ScaleFix
                     };
                 }
 
