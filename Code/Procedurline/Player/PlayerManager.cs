@@ -22,7 +22,7 @@ namespace Celeste.Mod.Procedurline {
         public readonly CompositeDataProcessor<Player, VoidBox, PlayerHairColorData> HairColorProcessor;
         public readonly CompositeDataProcessor<PlayerHair, int, PlayerHairNodeData> HairNodeProcessor;
 
-        private readonly DisposablePool hookPool;
+        private readonly DisposablePool hookPool = new DisposablePool();
         [ThreadStatic] private int hairGetterHooksBypassCounter;
 
         public PlayerManager(Game game) : base(game) {

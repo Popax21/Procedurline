@@ -63,7 +63,7 @@ namespace Celeste.Mod.Procedurline {
         public readonly CompositeAsyncDataProcessor<Sprite, string, Sprite.Animation> DynamicAnimationMixer;
         public readonly CompositeAsyncDataProcessor<Sprite, string, SpriteAnimationData> DynamicAnimationProcessor;
         public readonly SpriteAnimationCache DynamicAnimationCache;
-        private readonly DisposablePool hookPool;
+        private readonly DisposablePool hookPool = new DisposablePool();
 
         private readonly ConditionalWeakTable<Sprite, string> spriteIds = new ConditionalWeakTable<Sprite, string>();
         private readonly ConcurrentDictionary<Sprite, SpriteHandler> spriteHandlers = new ConcurrentDictionary<Sprite, SpriteHandler>();
