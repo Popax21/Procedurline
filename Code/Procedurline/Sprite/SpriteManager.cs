@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Reflection;
 using System.Diagnostics;
 using System.Threading;
@@ -198,12 +199,12 @@ namespace Celeste.Mod.Procedurline {
 
             //Create animation data
             SpriteAnimationData animData;
-            if(anim is PlayerSpriteAnimation playerAnim) {
+            if(anim is IPlayerSpriteAnimation playerAnim) {
                 animData = new PlayerSpriteAnimationData() {
                     Goto = animGoto,
                     Delay = animDelay,
                     Frames = new SpriteAnimationData.AnimationFrame[animFrames.Length],
-                    PlayerFrameData = playerAnim.PlayerFrameData
+                    PlayerFrameData = Enumerable.Range(0, animFrames.Length).Select(i => playerAnim.GetPlayerAnimationMetadata(i)).ToArray()
                 };
             } else {
                 animData = new SpriteAnimationData() {
@@ -277,12 +278,12 @@ namespace Celeste.Mod.Procedurline {
                 //Create animation
                 Sprite.Animation anim;
                 
-                if(animData is PlayerSpriteAnimationData playerAnimData) {
+                if(animData is IPlayerSpriteAnimation playerAnim) {
                     anim = new PlayerSpriteAnimation() {
                         Goto = animData.Goto,
                         Delay = animData.Delay,
                         Frames = new MTexture[frameRects.Length],
-                        PlayerFrameData = playerAnimData.PlayerFrameData
+                        PlayerFrameData = Enumerable.Range(0, frameRects.Length).Select(i => playerAnim.GetPlayerAnimationMetadata(i)).ToArray()
                     };
                 } else {
                     anim = new Sprite.Animation() {

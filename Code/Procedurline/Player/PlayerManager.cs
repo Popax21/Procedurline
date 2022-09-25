@@ -115,9 +115,9 @@ namespace Celeste.Mod.Procedurline {
 
         private PlayerSpriteAnimationFrameData? GetPlayerSpriteFrame(PlayerSprite sprite) {
             string curAnim = sprite.CurrentAnimationID ?? sprite.LastAnimationID;
-            if(curAnim == null || !(sprite.GetProcessedAnimation(curAnim) is PlayerSpriteAnimation panim) || panim.PlayerFrameData == null) return null;
-            if(sprite.CurrentAnimationFrame < 0 || panim.PlayerFrameData.Length <= sprite.CurrentAnimationFrame) return null;
-            return panim.PlayerFrameData[panim.Frames.Length-1];
+            if(curAnim == null || !(sprite.GetProcessedAnimation(curAnim) is Sprite.Animation anim)) return null;
+            if(sprite.CurrentAnimationFrame < 0 || anim.Frames.Length <= sprite.CurrentAnimationFrame) return null;
+            return (anim as IPlayerSpriteAnimation)?.GetPlayerAnimationMetadata(sprite.CurrentAnimationFrame);
         }
 
         private void PlayerSpriteCtorHook(On.Celeste.PlayerSprite.orig_ctor orig, PlayerSprite sprite, PlayerSpriteMode mode) {
