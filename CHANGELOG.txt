@@ -1,3 +1,7 @@
+---------- CHANGELOG VERSION 2.0.1 ----------
+- Add ScaledMTextures
+- Small bugfixes
+
 ---------- CHANGELOG VERSION 2.0 ----------
 - Base v2.0 release
 
