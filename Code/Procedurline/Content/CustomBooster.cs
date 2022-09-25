@@ -98,6 +98,7 @@ namespace Celeste.Mod.Procedurline {
         /// The type of boost it should give them, or <c>null</c> if no default behaviour should take place.
         /// </returns>
         protected abstract BoostType? OnPlayerEnter(Player player);
+
         [ContentVirtualize] [MethodImpl(MethodImplOptions.NoInlining)] protected virtual new void Appear() {}
         [ContentVirtualize(false)] protected virtual void AppearParticles() {
             //Modified vanilla code which uses custom particle types
