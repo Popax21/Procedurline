@@ -1,3 +1,7 @@
+---------- CHANGELOG VERSION 2.0.2 ----------
+- Add IPlayerSpriteAnimation
+- Small fixes and cleanup
+
 ---------- CHANGELOG VERSION 2.0.1 ----------
 - Add ScaledMTextures
 - Small bugfixes
