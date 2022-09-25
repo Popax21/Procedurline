@@ -62,7 +62,7 @@ namespace Celeste.Mod.Procedurline {
         public readonly CompositeAsyncDataProcessor<Sprite, string, Sprite.Animation> DynamicAnimationMixer;
         public readonly CompositeAsyncDataProcessor<Sprite, string, SpriteAnimationData> DynamicAnimationProcessor;
         public readonly SpriteAnimationCache DynamicAnimationCache;
-        private readonly List<ILHook> animationHooks = new List<ILHook>();
+        private readonly DisposablePool hookPool;
 
         private readonly ConditionalWeakTable<Sprite, string> spriteIds = new ConditionalWeakTable<Sprite, string>();
         private readonly ConcurrentDictionary<Sprite, SpriteHandler> spriteHandlers = new ConcurrentDictionary<Sprite, SpriteHandler>();
@@ -119,7 +119,7 @@ namespace Celeste.Mod.Procedurline {
                     }
 
                     //Add hook to list
-                    animationHooks.Add(hook);
+                    hookPool.Add(hook);
                 }
             }
         }
@@ -147,8 +147,7 @@ namespace Celeste.Mod.Procedurline {
             On.Monocle.Scene.Render -= SceneRenderHook;
             On.Celeste.Level.Render -= LevelRenderHook;
 
-            foreach(ILHook h in animationHooks) h.Dispose();
-            animationHooks.Clear();
+            hookPool.Dispose();
 
             DynamicAnimationCache?.Dispose();
             DynamicAnimationCache.TextureScope?.Dispose();

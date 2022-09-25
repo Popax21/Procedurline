@@ -4,6 +4,17 @@ using Monocle;
 
 namespace Celeste.Mod.Procedurline {
     /// <summary>
+    /// Holds the player's hair settings.
+    /// </summary>
+    public struct PlayerHairSettingsData {
+        public int NodeCount;
+        public Vector2 StepPerSegment;
+        public float StepInFacingPerSegment;
+        public float StepApproach;
+        public float StepYSinePerSegment;
+    }
+
+    /// <summary>
     /// Holds the player's hair colors.
     /// </summary>
     public struct PlayerHairColorData {
@@ -33,17 +44,6 @@ namespace Celeste.Mod.Procedurline {
             BadelineNormalColor = BadelineNormalColor.RemoveAlpha(),
             BadelineTwoDashesColor = BadelineTwoDashesColor.RemoveAlpha()
         };
-    }
-
-    /// <summary>
-    /// Holds the player's hair settings.
-    /// </summary>
-    public struct PlayerHairSettingsData {
-        public int NodeCount;
-        public Vector2 StepPerSegment;
-        public float StepInFacingPerSegment;
-        public float StepApproach;
-        public float StepYSinePerSegment;
     }
 
     /// <summary>

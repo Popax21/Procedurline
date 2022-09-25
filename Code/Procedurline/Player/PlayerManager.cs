@@ -22,7 +22,7 @@ namespace Celeste.Mod.Procedurline {
         public readonly CompositeDataProcessor<Player, VoidBox, PlayerHairColorData> HairColorProcessor;
         public readonly CompositeDataProcessor<PlayerHair, int, PlayerHairNodeData> HairNodeProcessor;
 
-        private List<Hook> spritePropHooks = new List<Hook>();
+        private readonly DisposablePool hookPool;
         [ThreadStatic] private int hairGetterHooksBypassCounter;
 
         public PlayerManager(Game game) : base(game) {
@@ -41,22 +41,22 @@ namespace Celeste.Mod.Procedurline {
                 //Install player sprite hooks
                 On.Celeste.PlayerSprite.ctor += PlayerSpriteCtorHook;
 
-                spritePropHooks.Add(new Hook(typeof(PlayerSprite).GetProperty(nameof(PlayerSprite.Running)).GetGetMethod(), (Func<Func<PlayerSprite, bool>, PlayerSprite, bool>) ((orig, sprite) => {
+                hookPool.Add(new Hook(typeof(PlayerSprite).GetProperty(nameof(PlayerSprite.Running)).GetGetMethod(), (Func<Func<PlayerSprite, bool>, PlayerSprite, bool>) ((orig, sprite) => {
                     return GetPlayerSpriteFrame(sprite)?.IsRunning ?? orig(sprite);
                 })));
-                spritePropHooks.Add(new Hook(typeof(PlayerSprite).GetProperty(nameof(PlayerSprite.DreamDashing)).GetGetMethod(), (Func<Func<PlayerSprite, bool>, PlayerSprite, bool>) ((orig, sprite) => {
+                hookPool.Add(new Hook(typeof(PlayerSprite).GetProperty(nameof(PlayerSprite.DreamDashing)).GetGetMethod(), (Func<Func<PlayerSprite, bool>, PlayerSprite, bool>) ((orig, sprite) => {
                     return GetPlayerSpriteFrame(sprite)?.IsDreamDashing ?? orig(sprite);
                 })));
-                spritePropHooks.Add(new Hook(typeof(PlayerSprite).GetProperty(nameof(PlayerSprite.CarryYOffset)).GetGetMethod(), (Func<Func<PlayerSprite, float>, PlayerSprite, float>) ((orig, sprite) => {
+                hookPool.Add(new Hook(typeof(PlayerSprite).GetProperty(nameof(PlayerSprite.CarryYOffset)).GetGetMethod(), (Func<Func<PlayerSprite, float>, PlayerSprite, float>) ((orig, sprite) => {
                     return GetPlayerSpriteFrame(sprite)?.CarryYOffset ?? orig(sprite);
                 })));
-                spritePropHooks.Add(new Hook(typeof(PlayerSprite).GetProperty(nameof(PlayerSprite.HasHair)).GetGetMethod(), (Func<Func<PlayerSprite, bool>, PlayerSprite, bool>) ((orig, sprite) => {
+                hookPool.Add(new Hook(typeof(PlayerSprite).GetProperty(nameof(PlayerSprite.HasHair)).GetGetMethod(), (Func<Func<PlayerSprite, bool>, PlayerSprite, bool>) ((orig, sprite) => {
                     return GetPlayerSpriteFrame(sprite)?.HasHair ?? orig(sprite);
                 })));
-                spritePropHooks.Add(new Hook(typeof(PlayerSprite).GetProperty(nameof(PlayerSprite.HairOffset)).GetGetMethod(), (Func<Func<PlayerSprite, Vector2>, PlayerSprite, Vector2>) ((orig, sprite) => {
+                hookPool.Add(new Hook(typeof(PlayerSprite).GetProperty(nameof(PlayerSprite.HairOffset)).GetGetMethod(), (Func<Func<PlayerSprite, Vector2>, PlayerSprite, Vector2>) ((orig, sprite) => {
                     return GetPlayerSpriteFrame(sprite)?.HairOffset ?? orig(sprite);
                 })));
-                spritePropHooks.Add(new Hook(typeof(PlayerSprite).GetProperty(nameof(PlayerSprite.HairFrame)).GetGetMethod(), (Func<Func<PlayerSprite, int>, PlayerSprite, int>) ((orig, sprite) => {
+                hookPool.Add(new Hook(typeof(PlayerSprite).GetProperty(nameof(PlayerSprite.HairFrame)).GetGetMethod(), (Func<Func<PlayerSprite, int>, PlayerSprite, int>) ((orig, sprite) => {
                     return GetPlayerSpriteFrame(sprite)?.HairFrame ?? orig(sprite);
                 })));
 
@@ -76,8 +76,7 @@ namespace Celeste.Mod.Procedurline {
             //Uninstall hooks
             On.Celeste.PlayerSprite.ctor -= PlayerSpriteCtorHook;
 
-            foreach(Hook hook in spritePropHooks) hook.Dispose();
-            spritePropHooks.Clear();
+            hookPool.Dispose();
 
             On.Celeste.Player.Update -= PlayerUpdateHook;
             IL.Celeste.Player.UpdateHair -= HairColorAccessModifier;
