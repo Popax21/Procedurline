@@ -62,8 +62,8 @@ namespace Celeste.Mod.Procedurline {
             Matrix colMat = ColorUtils.CalculateRecolorMatrix(IsRed ? RedColor : GreenColor, col);
 
             //Recolor particles
-            AppearParticleType = Booster.P_Appear.ApplyMatrix(colMat);
-            BurstParticleType = P_BurstRed.ApplyMatrix(colMat, 0.05f, 0.05f);
+            AppearParticleType = (IsRed ? P_RedAppear : P_Appear).ApplyMatrix(colMat, 0.05f, 0.05f);
+            BurstParticleType = (IsRed ? P_BurstRed : P_Burst).ApplyMatrix(colMat, 0.05f, 0.05f);
         }
 
         /// <summary>
