@@ -198,7 +198,7 @@ namespace Celeste.Mod.Procedurline {
         public long TotalCacheSize { get { lock(LOCK) return totalCacheSize; } }
         public long MaxCacheSize => Math.Min(ProcedurlineModule.Settings.MaxTextureCacheSize, Math.Max((MaxMemoryUsage - CurrentMemoryUsage) - ProcedurlineModule.Settings.MinTextureCacheMargin, 0));
 
-        public long CurrentMemoryUsage => curProc.WorkingSet64;
+        public long CurrentMemoryUsage => Math.Max(curProc.VirtualMemorySize64, curProc.WorkingSet64 + curProc.PagedMemorySize64);
         public long MaxMemoryUsage {
             get {
                 long maxMemUsage = (long) (Everest.SystemMemoryMB*1024*1024);
