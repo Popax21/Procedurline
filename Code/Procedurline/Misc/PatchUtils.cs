@@ -63,7 +63,7 @@ namespace Celeste.Mod.Procedurline {
         /// </summary>
         public static void PatchFieldProxy(this PropertyInfo prop, FieldInfo field, DisposablePool dpool) {
             //Check field for compatibility
-            if(prop.GetAccessors(true).Any(a => a.IsStatic != field.IsStatic) || prop.PropertyType.IsAssignableFrom(field.FieldType)) new ArgumentException($"Mismatching field {field.GetFullName()} and property {prop.GetFullName()} types!");
+            if(prop.GetAccessors(true).Any(a => a.IsStatic != field.IsStatic) || prop.PropertyType != field.FieldType) new ArgumentException($"Mismatching field {field.GetFullName()} and property {prop.GetFullName()} types!");
             if(!field.DeclaringType.IsAssignableFrom(prop.DeclaringType)) throw new ArgumentException($"Property {prop.GetFullName()} in different type than field!");
 
             //Hook getter
@@ -75,12 +75,12 @@ namespace Celeste.Mod.Procedurline {
                     ILCursor cursor = new ILCursor(ctx);
 
                     //Get the field value
-                    cursor.EmitReference(field);
-                    if(field.IsStatic) cursor.Emit(OpCodes.Ldnull);
-                    else cursor.Emit(OpCodes.Ldarg_0);
-                    cursor.Emit(OpCodes.Call, typeof(FieldInfo).GetMethod(nameof(FieldInfo.GetValue), new Type[] { typeof(object) }));
-                    cursor.Emit(OpCodes.Castclass, prop.PropertyType);
-                    if(field.FieldType.IsPrimitive) cursor.Emit(OpCodes.Unbox_Any, prop.PropertyType);
+                    if(field.IsStatic) {
+                        cursor.Emit(OpCodes.Ldsfld, field);
+                    } else {
+                        cursor.Emit(OpCodes.Ldarg_0);
+                        cursor.Emit(OpCodes.Ldfld, field);
+                    }
                     cursor.Emit(OpCodes.Ret);
                 }));
             }
@@ -94,17 +94,14 @@ namespace Celeste.Mod.Procedurline {
                     ILCursor cursor = new ILCursor(ctx);
 
                     //Set the field value
-                    cursor.EmitReference(field);
                     if(field.IsStatic) {
-                        cursor.Emit(OpCodes.Ldnull);
                         cursor.Emit(OpCodes.Ldarg_0);
+                        cursor.Emit(OpCodes.Stsfld, field);
                     } else {
                         cursor.Emit(OpCodes.Ldarg_0);
                         cursor.Emit(OpCodes.Ldarg_1);
+                        cursor.Emit(OpCodes.Stfld, field);
                     }
-                    if(field.FieldType.IsPrimitive) cursor.Emit(OpCodes.Box, prop.PropertyType);
-                    cursor.Emit(OpCodes.Castclass, field.FieldType);
-                    cursor.Emit(OpCodes.Call, typeof(FieldInfo).GetMethod(nameof(FieldInfo.SetValue), new Type[] { typeof(object), typeof(object) }));
                     cursor.Emit(OpCodes.Ret);
                 }));
             }
