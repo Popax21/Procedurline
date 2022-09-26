@@ -1,5 +1,5 @@
-- Name: ProcedurlineV2
-  Version: 2.0.3
+- Name: Procedurline
+  Version: 2.0.2
   DLL: Procedurline.dll
   Dependencies:
     - Name: Everest
