@@ -46,6 +46,8 @@ namespace Celeste.Mod.Procedurline {
                     if(timer != null) Logger.Log(ProcedurlineModule.Name, $"Finished processing sprite '{skey.SpriteID}' animation '{animId}' (took {timer.ElapsedMilliseconds}ms)");
 
                     return didModify;
+                } catch(OutOfMemoryException) {
+                    throw;
                 } catch(Exception e) {
                     token.ThrowIfCancellationRequested();
                     if(!skey.IsValid) return false;
@@ -185,6 +187,8 @@ namespace Celeste.Mod.Procedurline {
                 //Wait for the animation to finish updating
                 try {
                     await ProcessCustomAnimation(customAnim).OrCancelled(token);
+                } catch(OutOfMemoryException) {
+                    throw;
                 } catch(Exception e) {
                     //Custom animation processing exceptions aren't our responsibility
                     Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Encountered an error processing sprite animation data for CustomSpriteAnimation '{customAnim.AnimationID}': {e}");
