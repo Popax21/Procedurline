@@ -75,6 +75,8 @@ namespace Celeste.Mod.Procedurline {
                         //Replace animation
                         ReplaceAnimation(procAnim, texHandleRef.Data, valToken, true);
                     }
+                } catch(OutOfMemoryException) {
+                    throw;
                 } catch(Exception e) {
                     texHandleRef?.Data?.Dispose();
 
