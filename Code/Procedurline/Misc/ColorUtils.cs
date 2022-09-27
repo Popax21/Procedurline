@@ -61,7 +61,10 @@ namespace Celeste.Mod.Procedurline {
                 case 3: return new Color(0, X, C);
                 case 4: return new Color(X, 0, C);
                 case 5: return new Color(C, 0, X);
-                default: throw new InvalidOperationException("HSV Ht NOT IN VALID RANGE; THIS SHOULD NEVER HAPPEN!!!!");
+                default: {
+                    Celeste.CriticalFailureHandler(new InvalidOperationException("HSV Ht not in range [0,6)! This shouldn't happen!"));
+                    return default;
+                }
             }
         }
 
