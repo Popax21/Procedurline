@@ -25,8 +25,15 @@ namespace Celeste.Mod.Procedurline {
                 Texture = tex;
                 Alive = true;
 
-                //Increment the pin count if requested to do so
-                if(incrCount) Texture.IncrementCachePinCount();
+                //Increment the pin count
+                lock(tex.LOCK) {
+                    if(tex.IsDisposed) throw new ObjectDisposedException("TextureHandle");
+                    if(tex.cachePinCount++ <= 0) {
+                        //Force-cache the texture
+                        if(!ProcedurlineModule.TextureManager.CacheEvictor.CacheTexture(tex, true)) Celeste.CriticalFailureHandler(new InvalidOperationException("Couldn't force-cache texture!"));
+                        tex.dataCache ??= new TextureData(tex.Width, tex.Height);
+                    }
+                }
             }
 
             public void Dispose() {
@@ -108,7 +115,8 @@ namespace Celeste.Mod.Procedurline {
                 OwnsTexture = true;
 
                 //Create the data cache
-                InitCache();
+                dataUploadSem = new SemaphoreSlim(1, 1);
+                dataCancelSrc = new CancellationTokenSource();
             } catch(Exception) {
                 Dispose();
                 throw;
@@ -125,7 +133,8 @@ namespace Celeste.Mod.Procedurline {
                 OwnsTexture = false;
 
                 //Create the data cache
-                InitCache();
+                dataUploadSem = new SemaphoreSlim(1, 1);
+                dataCancelSrc = new CancellationTokenSource();
 
                 //Add to textures dictionary
                 lock(ProcedurlineModule.TextureManager.textureHandles) ProcedurlineModule.TextureManager.textureHandles[vtex] = this;
@@ -168,29 +177,10 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
-        private void InitCache() {
-            ProcedurlineModule.TextureManager.CacheEvictor.RunWithOOMHandler(() => {
-                dataCache = new TextureData(Width, Height);
-                dataUploadSem = new SemaphoreSlim(1, 1);
-                dataCancelSrc = new CancellationTokenSource();
-            });
-        }
-
         /// <summary>
         /// Creates a <see cref="CachePinHandle" /> for this texture. This will force it to be cached, and not get evicted as long as a pin handle is still alive
         /// </summary>
         public CachePinHandle PinCache() => new CachePinHandle(this);
-
-        private void IncrementCachePinCount() {
-            lock(LOCK) {
-                if(IsDisposed) throw new ObjectDisposedException("TextureHandle");
-                if(cachePinCount++ <= 0) {
-                    //Force-cache the texture
-                    if(!ProcedurlineModule.TextureManager.CacheEvictor.CacheTexture(this, true)) Celeste.CriticalFailureHandler(new InvalidOperationException("Couldn't force-cache texture!"));
-                    dataCache ??= new TextureData(Width, Height);
-                }
-            }
-        }
 
         /// <summary>
         /// Invalidates cached texture data
@@ -227,42 +217,50 @@ namespace Celeste.Mod.Procedurline {
         /// Gets the texture data for the texture, downloading it if required.
         /// <b>NOTE: DATA MIGHT BE CACHED, DO NOT MODIFY THE RETURNED <see cref="TextureData" /> OBJECT!</b>
         /// </summary>
-        public Task<CachePinHandle> GetTextureData(CancellationToken token = default) {
+        public async Task<CachePinHandle> GetTextureData(CancellationToken token = default) {
             token.ThrowIfCancellationRequested();
 
-            Task fetchTask;
-            lock(LOCK) {
-                if(IsDisposed) throw new ObjectDisposedException("TextureHandle");
+            CachePinHandle pinHandle = null;
+            try {
+                Task fetchTask;
+                lock(LOCK) {
+                    if(IsDisposed) throw new ObjectDisposedException("TextureHandle");
 
-                //Check for already cached data
-                if(dataCache != null && dataCacheValid) return Task.FromResult<CachePinHandle>(PinCache());
+                    //Check for already cached data
+                    if(dataCache != null && dataCacheValid) return PinCache();
 
-                //Increment cache pin count
-                IncrementCachePinCount();
+                    //Create a cache pin handle
+                    pinHandle = new CachePinHandle(this, true);
 
-                //Check if a fetch task is already running
-                if(dataFetchTask == null) dataFetchTask = ((Func<Task>) (async () => {
-                    await dataUploadSem.WaitAsync(dataCancelSrc.Token).ConfigureAwait(false);
-                    try {
-                        await ProcedurlineModule.TextureManager.CacheEvictor.RunWithOOMHandler(async () => {
-                            await ProcedurlineModule.TextureManager.DownloadData(this, dataCache, dataCancelSrc.Token).ConfigureAwait(false);
-                            lock(LOCK) {
-                                dataCacheValid = true;
-                                dataFetchTask = null;
-                            }
-                        });
-                    } finally {
-                        dataUploadSem.Release();
-                    }
-                }))();
+                    //Check if a fetch task is already running
+                    if(dataFetchTask == null) dataFetchTask = ((Func<Task>) (async () => {
+                        await dataUploadSem.WaitAsync(dataCancelSrc.Token).ConfigureAwait(false);
+                        try {
+                            await ProcedurlineModule.TextureManager.CacheEvictor.RunWithOOMHandler(async () => {
+                                await ProcedurlineModule.TextureManager.DownloadData(this, dataCache, dataCancelSrc.Token).ConfigureAwait(false);
+                                lock(LOCK) {
+                                    dataCacheValid = true;
+                                    dataFetchTask = null;
+                                }
+                            });
+                        } finally {
+                            dataUploadSem.Release();
+                        }
+                    }))();
 
-                fetchTask = dataFetchTask;
-            }
+                    fetchTask = dataFetchTask;
+                }
 
-            return ((Func<Task<CachePinHandle>>) (async () => {
+                //Wait for the fetch task to complete
                 await fetchTask.OrCancelled(token).ConfigureAwait(false);
-                return new CachePinHandle(this, false);
-            }))();
+
+                //Transfer ownership of the cache pin handle to the caller
+                return pinHandle;
+            } catch(Exception) {
+                //Something went wrong
+                pinHandle?.Dispose();
+                throw;
+            }
         }
 
         /// <summary>
@@ -283,10 +281,16 @@ namespace Celeste.Mod.Procedurline {
 
                         //Try to cache data
                         if(ProcedurlineModule.TextureManager.CacheEvictor.CacheTexture(this, false)) {
-                            dataCache ??= new TextureData(Width, Height);
-                            dataCacheValid = true;
-
-                            data.Copy(dataCache);
+                            try {
+                                dataCache ??= new TextureData(Width, Height);
+                                data.Copy(dataCache);
+                                dataCacheValid = true;
+                            } catch(Exception) {
+                                //Something went wrong
+                                ProcedurlineModule.TextureManager.CacheEvictor.RemoveTexture(this);
+                                dataCacheValid = false;
+                                throw;
+                            }
                         }
                     }
 
