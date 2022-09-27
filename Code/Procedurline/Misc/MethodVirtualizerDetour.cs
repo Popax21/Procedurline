@@ -9,7 +9,7 @@ using MonoMod.RuntimeDetour;
 namespace Celeste.Mod.Procedurline {
     //There do be dragons here...
     /// <summary>
-    /// Implements a detour, which redirects invocations of a non-virtual base method to a virtual method contained in a child class, if the instance is of that type.
+    /// Implements a detour which redirects invocations of a non-virtual base method to a virtual method contained in a child class, if the instance is of that type.
     /// Optionally also redirects the virtual method's base implementation back to the non-virtual one, which allows one to retroactively make a method virtual.
     /// </summary>
     public sealed class MethodVirtualizerDetour : IDetour {
