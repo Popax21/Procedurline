@@ -108,9 +108,7 @@ namespace Celeste.Mod.Procedurline {
                 OwnsTexture = true;
 
                 //Create the data cache
-                dataCache = new TextureData(width, height);
-                dataUploadSem = new SemaphoreSlim(1, 1);
-                dataCancelSrc = new CancellationTokenSource();
+                InitCache();
             } catch(Exception) {
                 Dispose();
                 throw;
@@ -127,9 +125,7 @@ namespace Celeste.Mod.Procedurline {
                 OwnsTexture = false;
 
                 //Create the data cache
-                dataCache = new TextureData(Width, Height);
-                dataUploadSem = new SemaphoreSlim(1, 1);
-                dataCancelSrc = new CancellationTokenSource();
+                InitCache();
 
                 //Add to textures dictionary
                 lock(ProcedurlineModule.TextureManager.textureHandles) ProcedurlineModule.TextureManager.textureHandles[vtex] = this;
@@ -170,6 +166,14 @@ namespace Celeste.Mod.Procedurline {
                 dataCancelSrc?.Dispose();
                 dataCancelSrc = null;
             }
+        }
+
+        private void InitCache() {
+            ProcedurlineModule.TextureManager.CacheEvictor.RunWithOOMHandler(() => {
+                dataCache = new TextureData(Width, Height);
+                dataUploadSem = new SemaphoreSlim(1, 1);
+                dataCancelSrc = new CancellationTokenSource();
+            });
         }
 
         /// <summary>
@@ -240,11 +244,13 @@ namespace Celeste.Mod.Procedurline {
                 if(dataFetchTask == null) dataFetchTask = ((Func<Task>) (async () => {
                     await dataUploadSem.WaitAsync(dataCancelSrc.Token).ConfigureAwait(false);
                     try {
-                        await ProcedurlineModule.TextureManager.DownloadData(this, dataCache, dataCancelSrc.Token).ConfigureAwait(false);
-                        lock(LOCK) {
-                            dataCacheValid = true;
-                            dataFetchTask = null;
-                        }
+                        await ProcedurlineModule.TextureManager.CacheEvictor.RunWithOOMHandler(async () => {
+                            await ProcedurlineModule.TextureManager.DownloadData(this, dataCache, dataCancelSrc.Token).ConfigureAwait(false);
+                            lock(LOCK) {
+                                dataCacheValid = true;
+                                dataFetchTask = null;
+                            }
+                        });
                     } finally {
                         dataUploadSem.Release();
                     }
@@ -271,19 +277,22 @@ namespace Celeste.Mod.Procedurline {
 
             await dataUploadSem.WaitAsync(dataCancelSrc.Token).ConfigureAwait(false);
             try {
-                lock(LOCK) {
-                    if(IsDisposed) throw new ObjectDisposedException("TextureHandle");
+                await ProcedurlineModule.TextureManager.CacheEvictor.RunWithOOMHandler(async () => {
+                    lock(LOCK) {
+                        if(IsDisposed) throw new ObjectDisposedException("TextureHandle");
 
-                    //Try to cache data
-                    if(ProcedurlineModule.TextureManager.CacheEvictor.CacheTexture(this, false)) {
-                        dataCache ??= new TextureData(Width, Height);
-                        dataCacheValid = true;
-                        data.Copy(dataCache);
+                        //Try to cache data
+                        if(ProcedurlineModule.TextureManager.CacheEvictor.CacheTexture(this, false)) {
+                            dataCache ??= new TextureData(Width, Height);
+                            dataCacheValid = true;
+
+                            data.Copy(dataCache);
+                        }
                     }
-                }
 
-                //Upload texture data
-                await ProcedurlineModule.TextureManager.UploadData(this, data, token).ConfigureAwait(false);
+                    //Upload texture data
+                    await ProcedurlineModule.TextureManager.UploadData(this, data, token).ConfigureAwait(false);
+                });
             } finally {
                 dataUploadSem.Release();
             }

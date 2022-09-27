@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using MonoMod.Utils;
 
@@ -17,6 +18,7 @@ namespace Celeste.Mod.Procedurline {
         private GCCallback gcCallback;
         private Process curProc;
 
+        private long maxMemUsage;
         private long totalCacheSize, effCacheSize;
         private LinkedList<TextureHandle> cachedTextures = new LinkedList<TextureHandle>(), pseudoCachedTextures = new LinkedList<TextureHandle>();
 
@@ -25,6 +27,8 @@ namespace Celeste.Mod.Procedurline {
 
         public TextureCacheEvictor() {
             lock(LOCK) {
+                maxMemUsage = (long) (Everest.SystemMemoryMB*1024*1024);
+
                 //Create a GC callback
                 gcCallback = new GCCallback(GCCallback);
 
@@ -70,6 +74,57 @@ namespace Celeste.Mod.Procedurline {
         /// The size of evicted texture data, in bytes.
         /// </returns>
         public long EvictAll() => EvictInternal(true);
+
+        internal void RunWithOOMHandler(Action act) {
+            int oomCounter = 0;
+            retry:;
+            try {
+                act();
+            } catch(OutOfMemoryException oomExcpt) {
+                TryRecoverOOM(oomExcpt, ref oomCounter);
+                goto retry;
+            }
+        }
+
+        internal async Task RunWithOOMHandler(Func<Task> act) {
+            int oomCounter = 0;
+            retry:;
+            try {
+                await act();
+            } catch(OutOfMemoryException oomExcpt) {
+                TryRecoverOOM(oomExcpt, ref oomCounter);
+                goto retry;
+            }
+        }
+
+        //If we have to call this method, we're on the verge of being completly screwed :derpeline:
+        internal void TryRecoverOOM(OutOfMemoryException oomExcpt, ref int oomCounter) {
+            Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $">>>>> ENCOUNTERED AN OOM ERROR WHILE TRYING TO HANDLE TEXTURE DATA <<<<<\n{oomExcpt}");
+
+            //Is this our first OOM?
+            if(oomCounter > 0) {
+                //We're definitely screwed
+                Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, "Second OOM in a row, aborting...");
+                throw oomExcpt;
+            }
+            oomCounter++;
+
+            //Try to recover
+            Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, "Trying to recover, but all bets are off beyond this point!");
+
+            //Adjust our upper memory limit in case it turned out the be inaccurate
+            long curMemUsage = CurrentMemoryUsage;
+            if(curMemUsage < maxMemUsage) {
+                Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Lowering maxmum memory usage limit from {maxMemUsage / 1024 / 1024}MB to {curMemUsage / 1024 / 1024}MB");
+                maxMemUsage = curMemUsage;
+            }
+
+            //Evict all cached textures
+            EvictAll();
+
+            //Let the GC collect as much memory as possible
+            GC.Collect();
+        }
 
         private long EvictInternal(bool evictAll) {
             lock(LOCK) {
@@ -198,22 +253,22 @@ namespace Celeste.Mod.Procedurline {
         public long TotalCacheSize { get { lock(LOCK) return totalCacheSize; } }
         public long MaxCacheSize => Math.Min(ProcedurlineModule.Settings.MaxTextureCacheSize, Math.Max((MaxMemoryUsage - CurrentMemoryUsage) - ProcedurlineModule.Settings.MinTextureCacheMargin, 0));
 
-        public long CurrentMemoryUsage => Math.Max(curProc.VirtualMemorySize64, curProc.WorkingSet64 + curProc.PagedMemorySize64);
+        public long CurrentMemoryUsage => Math.Max(curProc.VirtualMemorySize64, curProc.WorkingSet64);
         public long MaxMemoryUsage {
             get {
-                long maxMemUsage = (long) (Everest.SystemMemoryMB*1024*1024);
+                long maxMem = maxMemUsage;
 
                 //32 bit processes limit our memory
                 if(!Environment.Is64BitProcess) {
                     //On Windows, we're limited to the 4GB instead of 2GB on 64 bit machines
                     if(PlatformHelper.Is(MonoMod.Utils.Platform.Windows) && Environment.Is64BitOperatingSystem) {
-                        maxMemUsage = Math.Min(maxMemUsage, 4*1024*1024*1024L);
+                        maxMem = Math.Min(maxMem, 4*1024*1024*1024L);
                     } else {
-                        maxMemUsage = Math.Min(maxMemUsage, 2*1024*1024*1024L);
+                        maxMem = Math.Min(maxMem, 2*1024*1024*1024L);
                     }
                 }
 
-                return maxMemUsage;
+                return maxMem;
             }
         }
     }
