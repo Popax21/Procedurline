@@ -247,7 +247,7 @@ namespace Celeste.Mod.Procedurline {
                 return animData;
             } catch(Exception) {
                 for(int i = 0; i < frameTasks.Length; i++) {
-                    _ = frameTasks[i].ContinueWithOrInvoke(t => {
+                    _ = frameTasks[i]?.ContinueWithOrInvoke(t => {
                         if(t.Status == TaskStatus.RanToCompletion) t.Result.Dispose();
                     });
                 }
