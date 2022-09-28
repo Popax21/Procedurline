@@ -112,7 +112,7 @@ namespace Celeste.Mod.Procedurline {
                             //If it is a custom sprite animation, handle it properly
                             if(t.Result is CustomSpriteAnimation customAnim) HandleCustomAnimation(customAnim);
                         } else if(t.Exception != null) {
-                            if(t.Exception.InnerException is OutOfMemoryException oomExcpt) throw oomExcpt;
+                            if(t.Exception.InnerExceptions.First(e => e is OutOfMemoryException) is OutOfMemoryException oomExcpt) throw oomExcpt;
                             Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Error processing sprite '{SpriteID}' animation '{animId}': {t.Exception}");
                         }
                         MainThreadHelper.Do(() => Sprite.ReloadAnimation());  
