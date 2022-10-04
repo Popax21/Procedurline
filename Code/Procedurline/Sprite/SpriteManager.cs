@@ -470,6 +470,8 @@ namespace Celeste.Mod.Procedurline {
 
         private Sprite SpriteBankCreateHook(On.Monocle.SpriteBank.orig_Create orig, SpriteBank bank, string id) {
             Sprite sprt = orig(bank, id);
+            if(sprt == null) return null;
+
             spriteIds.Remove(sprt);
             spriteIds.Add(sprt, id);
             return sprt;
@@ -480,6 +482,8 @@ namespace Celeste.Mod.Procedurline {
             if(sprite is CustomSprite) throw new ArgumentException($"Can't use SpriteBank.CreateOn on a custom sprite of type '{sprite.GetType()}'!");
 
             Sprite sprt = orig(bank, sprite, id);
+            if(sprt == null) return null;
+
             spriteIds.Remove(sprt);
             spriteIds.Add(sprt, id);
             GetSpriteHandler(sprt)?.ResetCache();
