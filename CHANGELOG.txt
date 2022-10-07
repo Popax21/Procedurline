@@ -1,3 +1,8 @@
+---------- CHANGELOG VERSION 2.0.5 ----------
+- Fix demo map stil showing in the chapter select
+- Fix crash when SpriteBank sprite creation fails
+- Small tweaks to OOM behaviour
+
 ---------- CHANGELOG VERSION 2.0.3 ----------
 - Fix crashes because of uninitialized disposable pool
 - Fix custom booster particles
