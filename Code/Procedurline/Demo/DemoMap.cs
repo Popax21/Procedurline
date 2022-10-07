@@ -9,6 +9,8 @@ using MonoMod.Cil;
 
 namespace Celeste.Mod.Procedurline.Demo {
     public static class DemoMap {
+        private static readonly MethodInfo AreaData_Get_int = typeof(AreaData).GetMethod(nameof(AreaData.Get), new Type[] { typeof(int) });
+
         public static int DemoMapID = -1;
 
         [ContentInit]
@@ -36,31 +38,79 @@ namespace Celeste.Mod.Procedurline.Demo {
             level.Entities.Add(new SimpleBooster(new Vector2(entityX + 28f * 8, entityY)));
         }
 
+
         [ContentILHook("Celeste.Mod.UI.OuiHelper_ChapterSelect_LevelSet", "Enter", true)]
-        private static void ChapterSelectModifier(ILContext ctx) {
+        [ContentILHook("Celeste.Mod.UI.OuiMapList", "ReloadItems")]
+        [ContentILHook("Celeste.Mod.UI.OuiMapSearch", "ReloadItems")]
+        private static void HideChapterModifier(ILContext ctx) {
+            //Hook calls to AreaData.Get
             ILCursor cursor = new ILCursor(ctx);
+            while(cursor.TryGotoNext(MoveType.Before, i => i.MatchCallOrCallvirt(AreaData_Get_int))) {
+                ILLabel idMismatch = cursor.DefineLabel(), skip = cursor.DefineLabel();
 
-            //Find the variable storing the current AreaData index
-            MethodInfo AreaData_Get = typeof(AreaData).GetMethod(nameof(AreaData.Get), new Type[] { typeof(int) });
-            cursor.GotoNext(MoveType.Before, i => i.MatchLdloc(out _), i => i.MatchCall(AreaData_Get));
-            VariableReference idVar = (VariableReference) cursor.Instrs[cursor.Index].Operand;
-
-            //Hook calls to string.op_Inequality
-            while(cursor.TryGotoNext(MoveType.After, i => i.MatchCallOrCallvirt(typeof(string).GetMethod("op_Inequality")))) {
-                ILLabel idMismatch = cursor.DefineLabel();
-
-                //Check if the current area ID is the Procedurline demo map
-                cursor.Emit(OpCodes.Ldloc, idVar);
+                //Check if the area ID is the Procedurline demo map
+                cursor.MoveAfterLabels();
+                cursor.Emit(OpCodes.Dup);
                 cursor.Emit(OpCodes.Ldsfld, typeof(DemoMap).GetField(nameof(DemoMap.DemoMapID)));
                 cursor.Emit(OpCodes.Ceq);
                 cursor.Emit(OpCodes.Brfalse, idMismatch);
 
-                //Force the result to be false
+                //Force the result to be null
                 cursor.Emit(OpCodes.Pop);
-                cursor.Emit(OpCodes.Ldc_I4_0);
+                cursor.Emit(OpCodes.Ldnull);
+                cursor.Emit(OpCodes.Br, skip);
 
                 cursor.MarkLabel(idMismatch);
+                cursor.Index++;
+                cursor.MarkLabel(skip);
             }
+        }
+
+        //We have to fix Everest's bugs ._.
+        [ContentILHook("Celeste.Mod.UI.OuiHelper_ChapterSelect_LevelSet", "Enter", true)]
+        private static void EverestHotFix1(ILContext ctx) {
+            //Find the AreaData variable
+            int areaDataVarIdx = 0;
+            new ILCursor(ctx).GotoNext(i => i.MatchCallOrCallvirt(AreaData_Get_int)).GotoNext(i => i.MatchStloc(out areaDataVarIdx));
+
+            //Find the faulty check and fix it
+            ILCursor cursor = new ILCursor(ctx);
+            if(!cursor.TryGotoNext(MoveType.After, i => i.MatchLdloc(areaDataVarIdx), i => i.MatchBrfalse(out _))) {
+                Logger.Log("PLdemo", "Everest OuiHelper_ChapterSelect_LevelSet.Enter hotfix not required");
+                return;
+            }
+            Logger.Log(LogLevel.Warn, "PLdemo", "Applying Everest OuiHelper_ChapterSelect_LevelSet.Enter hotfix...");
+
+            ILLabel skipLabel = null;
+            cursor.Clone().GotoNext(i => i.MatchBrfalse(out skipLabel));
+            cursor.Instrs[cursor.Index-1].Operand = skipLabel;
+        }
+
+        [ContentILHook("Celeste.Mod.UI.OuiMapSearch", "ReloadItems")]
+        private static void EverestHotFix2(ILContext ctx) {
+            //Find the name access
+            ILCursor cursor = new ILCursor(ctx);
+            if(!cursor.TryGotoNext(MoveType.After, i => i.MatchCallOrCallvirt(AreaData_Get_int), i => i.MatchLdfld(typeof(AreaData), nameof(AreaData.Name)))) {
+                Logger.Log("PLdemo", "Everest OuiMapSearch.ReloadItems hotfix not required");
+                return;
+            }
+            Logger.Log(LogLevel.Warn, "PLdemo", "Applying Everest OuiMapSearch.ReloadItems hotfix...");
+
+            //Find the continue branch
+            ILLabel continueLabel = null;
+            cursor.Clone().GotoNext(i => i.MatchBrfalse(out continueLabel));
+
+            //Insert a null check
+            VariableDefinition areaDataVar = new VariableDefinition(ctx.Import(typeof(AreaData)));
+            ctx.Body.Variables.Add(areaDataVar);
+            cursor.Index--;
+            cursor.MoveAfterLabels();
+            cursor.Emit(OpCodes.Dup);
+            cursor.Emit(OpCodes.Stloc, areaDataVar);
+            cursor.Emit(OpCodes.Ldnull);
+            cursor.Emit(OpCodes.Ceq);
+            cursor.Emit(OpCodes.Brtrue, continueLabel);
+            cursor.Emit(OpCodes.Ldloc, areaDataVar);
         }
 
         [ContentHook("Celeste.AreaData", "Load")]
