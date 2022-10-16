@@ -39,16 +39,12 @@ namespace Celeste.Mod.Procedurline {
 
             //Install hooks
             using(new DetourContext(ProcedurlineModule.HOOK_PRIO)) {
-                On.Monocle.VirtualTexture.Reload += VTexReloadHook;
-                On.Monocle.VirtualTexture.Unload += VTexUnloadHook;
                 ScaledMTexture.AddHooks();
             }
         }
 
         protected override void Dispose(bool disposing) {
             //Remove hooks
-            On.Monocle.VirtualTexture.Reload -= VTexReloadHook;
-            On.Monocle.VirtualTexture.Unload -= VTexUnloadHook;
             ScaledMTexture.RemoveHooks();
 
             //Dispose texture scopes
@@ -121,30 +117,6 @@ namespace Celeste.Mod.Procedurline {
                 data.UploadData(tex);
                 return true;
             }, GlobalManager.ForceQueue)));
-        }
-
-        private void VTexReloadHook(On.Monocle.VirtualTexture.orig_Reload orig, VirtualTexture tex) {
-            //Block reloading of textures which are owned by Procedurline
-            lock(textureHandles) {
-                if(textureHandles.TryGetValue(tex, out TextureHandle handle) && handle.OwnsTexture) {
-                    Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Attempted reload of Procedurline-owned texture {handle.ToString()}!\n{new StackTrace()}");
-                    return;
-                }
-            }
-
-            orig(tex);
-        }
-
-        private void VTexUnloadHook(On.Monocle.VirtualTexture.orig_Unload orig, VirtualTexture tex) {
-            //Block unloading of textures which are owned by Procedurline
-            lock(textureHandles) {
-                if(textureHandles.TryGetValue(tex, out TextureHandle handle) && handle.OwnsTexture) {
-                    Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Attempted unload of Procedurline-owned texture {handle.ToString()}!\n{new StackTrace()}");
-                    return;
-                }
-            }
-
-            orig(tex);
         }
 
         [Command("pl_texscopes", "Displays all Procedurline texture scopes")]
