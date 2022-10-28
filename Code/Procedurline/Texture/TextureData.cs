@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using System.IO;
 
 namespace Celeste.Mod.Procedurline {
     /// <summary>
@@ -49,8 +50,14 @@ namespace Celeste.Mod.Procedurline {
 
         ~TextureData() {
             if(data != null) {
-                Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Detected leaked texture data {width}x{height} [{width*height*4} bytes]");
-                if(allocTrace != null) Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, allocTrace.ToString());
+                try {
+                    if((Console.Out as StreamWriter)?.BaseStream?.CanWrite ?? false) {
+                        Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Detected leaked texture data {width}x{height} [{width*height*4} bytes]");
+                        if(allocTrace != null) Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, allocTrace.ToString());
+                    }
+                } catch(Exception) {
+                    //The program might have shut down already
+                }
                 Dispose();
             }
         }
