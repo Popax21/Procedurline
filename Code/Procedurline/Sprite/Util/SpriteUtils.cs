@@ -79,6 +79,11 @@ namespace Celeste.Mod.Procedurline {
         /// Reloads the sprite's current animation. This can be used when you changed some animation data on the fly, and want it to take effect immediatly.
         /// </summary>
         public static void ReloadAnimation(this Sprite sprite, string animId = null) {
+            static MTexture GetFrameSafe(Sprite.Animation anim, int idx) {
+                if(idx < 0 || anim.Frames.Length <= idx) return null;
+                return anim.Frames[idx];
+            }
+
             //Get the currently playing animation
             string curAnim = sprite.CurrentAnimationID;
             if(string.IsNullOrEmpty(curAnim)) curAnim = sprite.LastAnimationID;
@@ -98,9 +103,9 @@ namespace Celeste.Mod.Procedurline {
 
                         //Replace the current frame, clamp frame index if the animation length shrunk
                         if(sprite.CurrentAnimationFrame < anim.Frames.Length) {
-                            sprite.SetFrame(anim.Frames[sprite.CurrentAnimationFrame]);
+                            sprite.SetFrame(GetFrameSafe(anim, sprite.CurrentAnimationFrame));
                         } else {
-                            sprite.SetFrame(anim.Frames[anim.Frames.Length-1]);
+                            sprite.SetFrame(GetFrameSafe(anim, anim.Frames.Length-1));
                         }
                     } else if(anim.Goto != null) {
                         //We now have a Goto, utilize it
@@ -110,12 +115,12 @@ namespace Celeste.Mod.Procedurline {
                         int frame = sprite.CurrentAnimationFrame;
                         sprite.Play(curAnim, true, false);
                         Sprite_CurrentAnimationFrame.SetValue(sprite, frame);
-                        sprite.SetFrame(anim.Frames[frame]);
+                        sprite.SetFrame(GetFrameSafe(anim, frame));
                     } else {
                         //Show first/last frame of animation
                         int frame = Math.Sign(Celeste.TimeRate * Celeste.TimeRateB) < 0 ? 0 : (anim.Frames.Length - 1);
                         Sprite_CurrentAnimationFrame.SetValue(sprite, frame);
-                        sprite.SetFrame(anim.Frames[frame]);
+                        sprite.SetFrame(GetFrameSafe(anim, frame));
                     }
                 }
             }
