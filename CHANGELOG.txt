@@ -1,3 +1,10 @@
+---------- CHANGELOG VERSION 2.0.6 ----------
+- Fix crash on exit because of TextureData leak logging
+- Fix zero frame animation crashes
+- Fix OOM exception detection
+- Remove VirtualTexture unload / reload hooks
+
+
 ---------- CHANGELOG VERSION 2.0.5 ----------
 - Fix demo map stil showing in the chapter select
 - Fix crash when SpriteBank sprite creation fails
