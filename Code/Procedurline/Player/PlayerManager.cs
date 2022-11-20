@@ -48,7 +48,7 @@ namespace Celeste.Mod.Procedurline {
                     return GetPlayerSpriteFrame(sprite)?.IsDreamDashing ?? orig(sprite);
                 })));
                 hookPool.Add(new Hook(typeof(PlayerSprite).GetProperty(nameof(PlayerSprite.CarryYOffset)).GetGetMethod(), (Func<Func<PlayerSprite, float>, PlayerSprite, float>) ((orig, sprite) => {
-                    return GetPlayerSpriteFrame(sprite)?.CarryYOffset ?? orig(sprite);
+                    return (GetPlayerSpriteFrame(sprite)?.CarryYOffset * sprite.Scale.Y) ?? orig(sprite);
                 })));
                 hookPool.Add(new Hook(typeof(PlayerSprite).GetProperty(nameof(PlayerSprite.HasHair)).GetGetMethod(), (Func<Func<PlayerSprite, bool>, PlayerSprite, bool>) ((orig, sprite) => {
                     return GetPlayerSpriteFrame(sprite)?.HasHair ?? orig(sprite);
