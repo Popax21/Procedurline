@@ -135,7 +135,7 @@ namespace Celeste.Mod.Procedurline {
                     Goto = anim.Goto,
                     Delay = anim.Delay,
                     Frames = anim.Frames,
-                    PlayerFrameData = anim.Frames.Select(f => PlayerSprite_FrameMetadata.TryGetValue(f.AtlasPath, out PlayerAnimMetadata md) ? new PlayerSpriteAnimationFrameData(animId, md) : default).ToArray()
+                    PlayerFrameData = Enumerable.Repeat<PlayerSpriteAnimationFrameData?>(null, anim.Frames.Length).ToArray()
                 };
             }
         }

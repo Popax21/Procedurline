@@ -33,9 +33,9 @@ namespace Celeste.Mod.Procedurline {
     /// <see cref="PlayerSpriteAnimationData" />
     public interface IPlayerSpriteAnimation {
         /// <summary>
-        /// Returns the player sprite animation metadata for a particular animation frame
+        /// Returns the player sprite animation metadata for a particular animation frame. When <c>null</c> is returned, the vanilla metadata will be used
         /// </summary>
-        PlayerSpriteAnimationFrameData GetPlayerAnimationMetadata(int frameIdx);
+        PlayerSpriteAnimationFrameData? GetPlayerAnimationMetadata(int frameIdx);
     }
 
     /// <summary>
@@ -45,9 +45,9 @@ namespace Celeste.Mod.Procedurline {
     /// <see cref="IPlayerSpriteAnimation" />
     /// <see cref="PlayerSpriteAnimationData" />
     public sealed class PlayerSpriteAnimation : Sprite.Animation, IPlayerSpriteAnimation {
-        public PlayerSpriteAnimationFrameData[] PlayerFrameData;
+        public PlayerSpriteAnimationFrameData?[] PlayerFrameData;
 
-        public PlayerSpriteAnimationFrameData GetPlayerAnimationMetadata(int frameIdx) => PlayerFrameData[frameIdx];
+        public PlayerSpriteAnimationFrameData? GetPlayerAnimationMetadata(int frameIdx) => PlayerFrameData[frameIdx];
     }
 
     /// <summary>
@@ -56,8 +56,8 @@ namespace Celeste.Mod.Procedurline {
     /// <see cref="IPlayerSpriteAnimation" />
     /// <see cref="PlayerSpriteAnimation" />
     public sealed class PlayerSpriteAnimationData : SpriteAnimationData, IPlayerSpriteAnimation {
-        public PlayerSpriteAnimationFrameData[] PlayerFrameData;
+        public PlayerSpriteAnimationFrameData?[] PlayerFrameData;
 
-        public PlayerSpriteAnimationFrameData GetPlayerAnimationMetadata(int frameIdx) => PlayerFrameData[frameIdx];
+        public PlayerSpriteAnimationFrameData? GetPlayerAnimationMetadata(int frameIdx) => PlayerFrameData[frameIdx];
     }
 }
