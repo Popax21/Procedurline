@@ -1,3 +1,7 @@
+---------- CHANGELOG VERSION 2.0.7 ----------
+- Fix a desync of the FW TAS because of missing CarryYOffset scaling
+
+
 ---------- CHANGELOG VERSION 2.0.6 ----------
 - Fix crash on exit because of TextureData leak logging
 - Fix zero frame animation crashes
