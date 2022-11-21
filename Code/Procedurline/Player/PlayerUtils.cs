@@ -1,9 +1,13 @@
+using System.Reflection;
+using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 
 using Monocle;
 
 namespace Celeste.Mod.Procedurline {
     public static class PlayerUtils {
+        private static readonly Dictionary<string, PlayerAnimMetadata> PlayerSprite_FrameMetadata = (Dictionary<string, PlayerAnimMetadata>) typeof(PlayerSprite).GetField("FrameMetadata", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+
         public static Color SKIN_COLOR = Calc.HexToColor("#d9a066");
         public static Color SKIN_HIGHLIGHT_COLOR = Calc.HexToColor("#eec39a");
         public static Color SHIRT_PRIMARY_COLOR = Calc.HexToColor("#5b6ee1");
@@ -56,6 +60,23 @@ namespace Celeste.Mod.Procedurline {
                 }
             }
             return false;
+        }
+
+        /// <summary>
+        /// Returns the vanilla player animation metadata for a given frame.
+        /// </summary>
+        public static PlayerSpriteAnimationFrameData? GetVanillaPlayerAnimationMetadata(this PlayerSprite sprite, string animId, int frameIdx) {
+            MTexture frame = sprite.Animations[animId].Frames[frameIdx];
+            if(!PlayerSprite_FrameMetadata.TryGetValue(frame.AtlasPath, out PlayerAnimMetadata md)) return null;
+            return new PlayerSpriteAnimationFrameData(animId, md);
+        }
+
+        /// <summary>
+        /// Returns the player animation metadata for a given frame, falling back to vanilla logic if required.
+        /// </summary>
+        public static PlayerSpriteAnimationFrameData? GetPlayerAnimationMetadata(this PlayerSprite sprite, string animId, int frameIdx) {
+            if(sprite.Animations[animId] is IPlayerSpriteAnimation playerAnim && playerAnim.GetPlayerAnimationMetadata(frameIdx) is PlayerSpriteAnimationFrameData mdata) return mdata;
+            return sprite.GetVanillaPlayerAnimationMetadata(animId, frameIdx);
         }
     }
 }

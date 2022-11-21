@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using System.Reflection;
-using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 
 using Mono.Cecil;
@@ -16,8 +15,6 @@ namespace Celeste.Mod.Procedurline {
     /// Manages player related processors like hair color processors.
     /// </summary>
     public sealed class PlayerManager : GameComponent {
-        private static readonly Dictionary<string, PlayerAnimMetadata> PlayerSprite_FrameMetadata = (Dictionary<string, PlayerAnimMetadata>) typeof(PlayerSprite).GetField("FrameMetadata", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
-
         public readonly CompositeDataProcessor<Player, VoidBox, PlayerHairSettingsData> HairSettingsProcessor;
         public readonly CompositeDataProcessor<Player, VoidBox, PlayerHairColorData> HairColorProcessor;
         public readonly CompositeDataProcessor<PlayerHair, int, PlayerHairNodeData> HairNodeProcessor;
