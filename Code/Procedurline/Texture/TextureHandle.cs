@@ -37,27 +37,33 @@ namespace Celeste.Mod.Procedurline {
             }
 
             public void Dispose() {
+                bool doEvictorSweep = false;
                 lock(Texture.LOCK) {
                     if(!Alive) return;
                     Alive = false;
 
                     //Decrement the pin count, and do an eviction sweep if it reached zero
-                    if(--Texture.cachePinCount <= 0) ProcedurlineModule.TextureManager.CacheEvictor.DoSweep();
+                    if(--Texture.cachePinCount <= 0) doEvictorSweep = true;
                 }
+
+                //We have to make this call while not holding the texture lock, otherwise we might deadlock with an already ongoing eviction
+                if(doEvictorSweep) ProcedurlineModule.TextureManager.CacheEvictor.DoSweep();
             }
 
             /// <summary>
             /// Clones the texture's data, and then disposes the <see cref="CachePinHandle" />
             /// </summary>
             public TextureData CloneDataAndDispose() {
+                TextureData texData;
+
                 lock(Texture.LOCK) {
                     if(!Alive) throw new ObjectDisposedException("TextureHandle.CachePinHandle");
                     if(!Texture.dataCacheValid) throw new InvalidOperationException("Cached texture data has been manually invalidated!");
-
-                    TextureData texData = Texture.CachedData.Clone();
-                    Dispose();
-                    return texData;
+                    texData = Texture.CachedData.Clone();
                 }
+
+                Dispose();
+                return texData;
             }
 
             /// <summary>
@@ -69,8 +75,9 @@ namespace Celeste.Mod.Procedurline {
                     if(!Texture.dataCacheValid) throw new InvalidOperationException("Cached texture data has been manually invalidated!");
 
                     Texture.CachedData.Copy(dst, srcRect, dstRect);
-                    Dispose();
                 }
+
+                Dispose();
             }
         }
 
