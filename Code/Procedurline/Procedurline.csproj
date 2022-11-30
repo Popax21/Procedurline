@@ -6,6 +6,7 @@
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>None</ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>
         <NoWarn>1591;1573</NoWarn>
+        <PathMap>$(MSBuildProjectDirectory)=X:\Procedurline\</PathMap>
 
         <CelesteGamePath Condition="'$(CELESTEGAMEPATH)' == ''">..\..\..\..</CelesteGamePath>
     </PropertyGroup>
