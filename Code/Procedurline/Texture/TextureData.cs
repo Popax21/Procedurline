@@ -213,20 +213,40 @@ namespace Celeste.Mod.Procedurline {
             [MethodImpl(MethodImplOptions.AggressiveInlining)] get => height;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void CheckAccess(int x, int y) {
+#if DEBUG
+            if(data == null) throw new ObjectDisposedException(nameof(TextureData));
+            if(x < 0 || y < 0 || x >= width || y >= height) throw new ArgumentException($"Attempted invalid access of OOB pixel {x},{y} size {width},{height}");
+#endif
+        }
+
         /// <summary>
         /// WARNING: No bounds checks are performed! Make sure you provide valid coordinates!
         /// </summary>
         public Color this[int x, int y] {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)] get => data[y*width + x];
-            [MethodImpl(MethodImplOptions.AggressiveInlining)] set => data[y*width + x] = value;
+            [MethodImpl(MethodImplOptions.AggressiveInlining)] get {
+                CheckAccess(x, y);
+                return data[y*width + x];
+            }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)] set {
+                CheckAccess(x, y);
+                data[y*width + x] = value;
+            }
         }
 
         /// <summary>
         /// WARNING: No bounds checks are performed! Make sure you provide valid coordinates!
         /// </summary>
         public Color this[Point p] {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)] get => data[p.Y*width + p.X];
-            [MethodImpl(MethodImplOptions.AggressiveInlining)] set => data[p.Y*width + p.X] = value;
+            [MethodImpl(MethodImplOptions.AggressiveInlining)] get {
+                CheckAccess(p.X, p.Y);
+                return data[p.Y*width + p.X];
+            }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)] set {
+                CheckAccess(p.X, p.Y);
+                data[p.Y*width + p.X] = value;
+            }
         }
 
         /// <summary>
