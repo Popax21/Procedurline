@@ -30,7 +30,7 @@ namespace Celeste.Mod.Procedurline {
             CallBase = callBase;
 
             Type[] methParams = baseMeth.GetParameters().Select(p => p.ParameterType).ToArray();
-            Type[] methThisParams = methParams.Prepend(baseMeth.GetThisParamType()).ToArray();
+            Type[] methThisParams = Enumerable.Repeat(baseMeth.GetThisParamType(), 1).Concat(methParams).ToArray();
 
             if(!virtualMeth.GetParameters().Select(p => p.ParameterType).SequenceEqual(methParams) || baseMeth.ReturnParameter.ParameterType != virtualMeth.ReturnParameter.ParameterType) throw new ArgumentException("Argument type mistmatch between base and virtual method!");
 
