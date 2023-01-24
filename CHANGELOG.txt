@@ -1,3 +1,8 @@
+---------- CHANGELOG VERSION 2.0.10 ----------
+- Add TextureData debug access checks
+- Remove IEnumerable.Prepend call (fixes a crash on some Windows machines) 
+
+
 ---------- CHANGELOG VERSION 2.0.9 ----------
 - Fix deadlock when disposing texture CachePinHandles
 
