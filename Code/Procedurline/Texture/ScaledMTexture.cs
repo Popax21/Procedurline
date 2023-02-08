@@ -62,7 +62,7 @@ namespace Celeste.Mod.Procedurline {
         }
 
         internal static void RemoveHooks() {
-            IL.Monocle.MTexture.Draw_Vector2 += DrawModifier;
+            IL.Monocle.MTexture.Draw_Vector2 -= DrawModifier;
             IL.Monocle.MTexture.Draw_Vector2_Vector2 -= DrawModifier;
             IL.Monocle.MTexture.Draw_Vector2_Vector2_Color -= DrawModifier;
             IL.Monocle.MTexture.Draw_Vector2_Vector2_Color_float -= DrawModifier;
