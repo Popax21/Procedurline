@@ -141,7 +141,7 @@ namespace Celeste.Mod.Procedurline {
             On.Monocle.Component.EntityRemoved -= ComponentEntityRemovedHook;
             On.Monocle.Component.SceneEnd -= ComponentSceneEndHook;
 
-            On.Monocle.Image.Render += ImageRenderHook;
+            On.Monocle.Image.Render -= ImageRenderHook;
             On.Monocle.Sprite.CreateClone -= SpriteCreateCloneHook;
             On.Monocle.Sprite.CloneInto -= SpriteCloneIntoHook;
             On.Monocle.SpriteBank.Create -= SpriteBankCreateHook;
