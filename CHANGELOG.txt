@@ -1,3 +1,7 @@
+---------- CHANGELOG VERSION 2.0.11 ----------
+- Fix duplicate hooks when shutting down (can cause a crash)
+
+
 ---------- CHANGELOG VERSION 2.0.10 ----------
 - Add TextureData debug access checks
 - Remove IEnumerable.Prepend call (fixes a crash on some Windows machines) 
