@@ -99,7 +99,7 @@ namespace Celeste.Mod.Procedurline {
         private TextureData dataCache;
 
         private SemaphoreSlim dataUploadSem;
-        private CancellationTokenSource dataCancelSrc;
+        private CancellationTokenSource dataCancelSrc, dataDownloadCancelSrc;
         private Task dataFetchTask = null;
 
         public TextureHandle(string name, TextureScope scope, int width, int height, Color col) : base(name, scope) {
@@ -176,11 +176,16 @@ namespace Celeste.Mod.Procedurline {
                 cachePinHandles.Clear();
 
                 dataCancelSrc?.Cancel();
+                dataDownloadCancelSrc?.Cancel();
+
                 dataUploadSem?.Dispose();
                 dataUploadSem = null;
 
                 dataCancelSrc?.Dispose();
                 dataCancelSrc = null;
+
+                dataDownloadCancelSrc?.Dispose();
+                dataDownloadCancelSrc = null;
             }
         }
 
@@ -212,10 +217,17 @@ namespace Celeste.Mod.Procedurline {
             //Check if we're pinned in the cache
             if(cachePinCount > 0) return false;
 
-            //Dispose cached data
-            dataCache?.Dispose();
+            //Dispose cached data, unless there's currently a pending download
+            //In which case, cancel the download
+            if (dataDownloadCancelSrc != null) {
+                dataDownloadCancelSrc.Cancel();
+            } else {
+                dataCache.Dispose();
+            }
+
             dataCache = null;
             dataCacheValid = false;
+            dataDownloadCancelSrc = null;
 
             return true;
         }
@@ -237,23 +249,54 @@ namespace Celeste.Mod.Procedurline {
                     if(dataCache != null && dataCacheValid) return PinCache();
 
                     //Create a cache pin handle
-                    pinHandle = new CachePinHandle(this, true);
+                    pinHandle = PinCache();
 
                     //Check if a fetch task is already running
-                    if(dataFetchTask == null) dataFetchTask = ((Func<Task>) (async () => {
-                        await dataUploadSem.WaitAsync(dataCancelSrc.Token).ConfigureAwait(false);
-                        try {
-                            await ProcedurlineModule.TextureManager.CacheEvictor.RunWithOOMHandler(async () => {
-                                await ProcedurlineModule.TextureManager.DownloadData(this, dataCache, dataCancelSrc.Token).ConfigureAwait(false);
-                                lock(LOCK) {
-                                    dataCacheValid = true;
-                                    dataFetchTask = null;
+                    if(dataFetchTask == null) {
+                        TextureData cacheData = dataCache;
+                        dataFetchTask = ((Func<Task>) (async () => {
+                            await dataUploadSem.WaitAsync(dataCancelSrc.Token).ConfigureAwait(false);
+
+                            //Mark the download has having started
+                            CancellationTokenSource tokenSrc;
+                            lock(LOCK) {
+                                if(cacheData != dataCache) {
+                                    //The invalidation happened before we set the download flag, so the data object has already been disposed of
+                                    dataUploadSem.Release();
+                                    return;
                                 }
-                            });
-                        } finally {
-                            dataUploadSem.Release();
-                        }
-                    }))();
+
+                                tokenSrc = dataDownloadCancelSrc = new CancellationTokenSource();
+                            }
+
+                            try {
+                                //Download into the cached data object
+                                await ProcedurlineModule.TextureManager.CacheEvictor.RunWithOOMHandler(async () => {
+                                    await ProcedurlineModule.TextureManager.DownloadData(this, dataCache, tokenSrc.Token).ConfigureAwait(false);
+                                    lock(LOCK) {
+                                        if(dataCache == cacheData) {
+                                            dataCacheValid = true;
+                                            dataFetchTask = null;
+                                        }
+                                    }
+                                });
+                            } finally {
+                                //Mark the download as complete
+                                lock(LOCK) {
+                                    if(dataCache == cacheData) {
+                                        //The cached data hasn't been invalidated since the task was started
+                                        dataDownloadCancelSrc.Dispose();
+                                        dataDownloadCancelSrc = null;
+                                        dataUploadSem.Release();
+                                    } else {
+                                        //The cache has been invalidated during the download
+                                        //In this case, we don't even hold the semaphore anymore
+                                        cacheData.Dispose();
+                                    }
+                                }
+                            }
+                        }))();
+                    }
 
                     fetchTask = dataFetchTask;
                 }
@@ -276,11 +319,18 @@ namespace Celeste.Mod.Procedurline {
         public async Task SetTextureData(TextureData data, CancellationToken token = default) {
             token.ThrowIfCancellationRequested();
 
+            CancellationToken dataToken;
             lock(LOCK) {
                 if(IsDisposed) throw new ObjectDisposedException("TextureHandle");
+                dataToken = dataCancelSrc.Token;
             }
 
-            await dataUploadSem.WaitAsync(dataCancelSrc.Token).ConfigureAwait(false);
+            using(CancellationTokenSource tokenSrc = new CancellationTokenSource())
+            using(dataToken.Register(tokenSrc.Cancel))
+            using(token.Register(tokenSrc.Cancel)) {
+                await dataUploadSem.WaitAsync(dataCancelSrc.Token).ConfigureAwait(false);
+            }
+        
             try {
                 await ProcedurlineModule.TextureManager.CacheEvictor.RunWithOOMHandler(async () => {
                     lock(LOCK) {
