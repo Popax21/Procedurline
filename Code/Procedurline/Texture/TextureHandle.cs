@@ -20,6 +20,8 @@ namespace Celeste.Mod.Procedurline {
         public sealed class CachePinHandle : IDisposable {
             public readonly TextureHandle Texture;
             public bool Alive { get; internal set; }
+            private LinkedListNode<CachePinHandle> listNode;
+            internal bool forceDisposed = false;
 
             internal CachePinHandle(TextureHandle tex, bool incrCount = true) {
                 Texture = tex;
@@ -28,8 +30,11 @@ namespace Celeste.Mod.Procedurline {
                 //Increment the pin count
                 lock(tex.LOCK) {
                     if(tex.IsDisposed) throw new ObjectDisposedException("TextureHandle");
-                    if(tex.cachePinCount++ <= 0) {
-                        //Force-cache the texture
+
+                    listNode = tex.cachePinHandles.AddLast(this);
+
+                    //Force-cache the texture if this is the first handle
+                    if(tex.cachePinHandles.Count <= 1) {
                         if(!ProcedurlineModule.TextureManager.CacheEvictor.CacheTexture(tex, true)) Celeste.CriticalFailureHandler(new InvalidOperationException("Couldn't force-cache texture!"));
                         tex.dataCache ??= new TextureData(tex.Width, tex.Height);
                     }
@@ -41,9 +46,12 @@ namespace Celeste.Mod.Procedurline {
                 lock(Texture.LOCK) {
                     if(!Alive) return;
                     Alive = false;
+                    
+                    Texture.cachePinHandles.Remove(listNode);
+                    listNode = null;
 
-                    //Decrement the pin count, and do an eviction sweep if it reached zero
-                    if(--Texture.cachePinCount <= 0) doEvictorSweep = true;
+                    //Do an eviction sweep if this was the the last handle
+                    if(Texture.cachePinHandles.Count <= 0) doEvictorSweep = true;
                 }
 
                 //We have to make this call while not holding the texture lock, otherwise we might deadlock with an already ongoing eviction
@@ -57,8 +65,10 @@ namespace Celeste.Mod.Procedurline {
                 TextureData texData;
 
                 lock(Texture.LOCK) {
+                    if(forceDisposed) throw new InvalidOperationException("Cached texture data has been manually invalidated!");
                     if(!Alive) throw new ObjectDisposedException("TextureHandle.CachePinHandle");
-                    if(!Texture.dataCacheValid) throw new InvalidOperationException("Cached texture data has been manually invalidated!");
+                    if(!Texture.dataCacheValid) throw new InvalidOperationException("Cached texture data is invalid!");
+
                     texData = Texture.CachedData.Clone();
                 }
 
@@ -71,8 +81,9 @@ namespace Celeste.Mod.Procedurline {
             /// </summary>
             public void CopyDataAndDispose(TextureData dst, Rectangle? srcRect = null, Rectangle? dstRect = null) {
                 lock(Texture.LOCK) {
+                    if(forceDisposed) throw new InvalidOperationException("Cached texture data has been manually invalidated!");
                     if(!Alive) throw new ObjectDisposedException("TextureHandle.CachePinHandle");
-                    if(!Texture.dataCacheValid) throw new InvalidOperationException("Cached texture data has been manually invalidated!");
+                    if(!Texture.dataCacheValid) throw new InvalidOperationException("Cached texture data is invalid!");
 
                     Texture.CachedData.Copy(dst, srcRect, dstRect);
                 }
@@ -92,14 +103,13 @@ namespace Celeste.Mod.Procedurline {
 
         internal LinkedListNode<TextureHandle> cacheNode;
         internal bool isPseudoCached;
-        private int cachePinCount;
         private LinkedList<CachePinHandle> cachePinHandles = new LinkedList<CachePinHandle>();
 
         private bool dataCacheValid = false;
         private TextureData dataCache;
 
         private SemaphoreSlim dataUploadSem;
-        private CancellationTokenSource dataCancelSrc, dataDownloadCancelSrc;
+        private CancellationTokenSource dataCancelSrc, dataFetchCancelSrc;
         private Task dataFetchTask = null;
 
         public TextureHandle(string name, TextureScope scope, int width, int height, Color col) : base(name, scope) {
@@ -176,7 +186,7 @@ namespace Celeste.Mod.Procedurline {
                 cachePinHandles.Clear();
 
                 dataCancelSrc?.Cancel();
-                dataDownloadCancelSrc?.Cancel();
+                dataFetchCancelSrc?.Cancel();
 
                 dataUploadSem?.Dispose();
                 dataUploadSem = null;
@@ -184,8 +194,8 @@ namespace Celeste.Mod.Procedurline {
                 dataCancelSrc?.Dispose();
                 dataCancelSrc = null;
 
-                dataDownloadCancelSrc?.Dispose();
-                dataDownloadCancelSrc = null;
+                dataFetchCancelSrc?.Dispose();
+                dataFetchCancelSrc = null;
             }
         }
 
@@ -202,7 +212,10 @@ namespace Celeste.Mod.Procedurline {
                 if(IsDisposed) throw new ObjectDisposedException("TextureHandle");
 
                 //Force-dispose all cache pin handles
-                foreach(CachePinHandle pinHandle in cachePinHandles) pinHandle.Dispose();
+                foreach(CachePinHandle pinHandle in cachePinHandles) {
+                    pinHandle.forceDisposed = true;
+                    pinHandle.Dispose();
+                }
                 cachePinHandles.Clear();
 
                 //Remove from cache
@@ -215,19 +228,20 @@ namespace Celeste.Mod.Procedurline {
 
         internal bool EvictCachedData() {
             //Check if we're pinned in the cache
-            if(cachePinCount > 0) return false;
+            if(cachePinHandles.Count > 0) return false;
 
             //Dispose cached data, unless there's currently a pending download
             //In which case, cancel the download
-            if (dataDownloadCancelSrc != null) {
-                dataDownloadCancelSrc.Cancel();
+            if (dataFetchCancelSrc != null) {
+                dataFetchCancelSrc.Cancel();
+                dataFetchTask = null;
             } else {
-                dataCache.Dispose();
+                dataCache?.Dispose();
             }
 
             dataCache = null;
             dataCacheValid = false;
-            dataDownloadCancelSrc = null;
+            dataFetchCancelSrc = null;
 
             return true;
         }
@@ -266,7 +280,7 @@ namespace Celeste.Mod.Procedurline {
                                     return;
                                 }
 
-                                tokenSrc = dataDownloadCancelSrc = new CancellationTokenSource();
+                                tokenSrc = dataFetchCancelSrc = new CancellationTokenSource();
                             }
 
                             try {
@@ -274,10 +288,7 @@ namespace Celeste.Mod.Procedurline {
                                 await ProcedurlineModule.TextureManager.CacheEvictor.RunWithOOMHandler(async () => {
                                     await ProcedurlineModule.TextureManager.DownloadData(this, dataCache, tokenSrc.Token).ConfigureAwait(false);
                                     lock(LOCK) {
-                                        if(dataCache == cacheData) {
-                                            dataCacheValid = true;
-                                            dataFetchTask = null;
-                                        }
+                                        if(dataCache == cacheData) dataCacheValid = true;
                                     }
                                 });
                             } finally {
@@ -285,8 +296,9 @@ namespace Celeste.Mod.Procedurline {
                                 lock(LOCK) {
                                     if(dataCache == cacheData) {
                                         //The cached data hasn't been invalidated since the task was started
-                                        dataDownloadCancelSrc.Dispose();
-                                        dataDownloadCancelSrc = null;
+                                        dataFetchTask = null;
+                                        dataFetchCancelSrc.Dispose();
+                                        dataFetchCancelSrc = null;
                                         dataUploadSem.Release();
                                     } else {
                                         //The cache has been invalidated during the download
@@ -342,7 +354,9 @@ namespace Celeste.Mod.Procedurline {
                                 dataCache ??= new TextureData(Width, Height);
                                 data.Copy(dataCache);
                                 dataCacheValid = true;
-                            } catch(Exception) {
+                            } catch(Exception e) {
+                                Logger.Log(LogLevel.Error, ProcedurlineModule.Name, $"Error while caching uploaded texture data for '{Path}': {e}");
+
                                 //Something went wrong
                                 ProcedurlineModule.TextureManager.CacheEvictor.RemoveTexture(this);
                                 dataCacheValid = false;
