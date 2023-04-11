@@ -121,7 +121,7 @@ namespace Celeste.Mod.Procedurline {
                 MainThreadHelper.Do(() => {
                     lock(LOCK) {
                         if(IsDisposed) return;
-                        vtex = VirtualContent.CreateTexture($"/PLHANDLE{Path}", width, height, col);
+                        vtex = VirtualContent.CreateTexture($"PLHANDLE/{Path}", width, height, col);
                         mtex = new MTexture(vtex);
                         ShortCircuitTextureLoad();
 
@@ -235,6 +235,8 @@ namespace Celeste.Mod.Procedurline {
             if (dataFetchCancelSrc != null) {
                 dataFetchCancelSrc.Cancel();
                 dataFetchTask = null;
+
+                dataUploadSem.Release();
             } else {
                 dataCache?.Dispose();
             }
@@ -286,7 +288,7 @@ namespace Celeste.Mod.Procedurline {
                             try {
                                 //Download into the cached data object
                                 await ProcedurlineModule.TextureManager.CacheEvictor.RunWithOOMHandler(async () => {
-                                    await ProcedurlineModule.TextureManager.DownloadData(this, dataCache, tokenSrc.Token).ConfigureAwait(false);
+                                    await ProcedurlineModule.TextureManager.DownloadData(this, cacheData, tokenSrc.Token).ConfigureAwait(false);
                                     lock(LOCK) {
                                         if(dataCache == cacheData) dataCacheValid = true;
                                     }
