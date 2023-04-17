@@ -1,3 +1,8 @@
+---------- CHANGELOG VERSION 2.0.13 ----------
+- Fix TextureHandle download/uploads deadlocking
+- Minor other bugfixes
+
+
 ---------- CHANGELOG VERSION 2.0.12 ----------
 - Fix TextureHandle.GetData edge cases, resulting in error textures
 - Fix TextureHandle.CachePinHandle force disposal not being registered
