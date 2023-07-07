@@ -9,6 +9,7 @@
         <PathMap>$(MSBuildProjectDirectory)=X:\Procedurline\</PathMap>
 
         <CelesteGamePath Condition="'$(CELESTEGAMEPATH)' == ''">..\..\..\..</CelesteGamePath>
+        <CelesteGamePath Condition="Exists('$(CELESTEGAMEPATH)\Celeste.dll')">$(CELESTEGAMEPATH)\legacyRef</CelesteGamePath>
     </PropertyGroup>
 
     <ItemDefinitionGroup>
