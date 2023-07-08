@@ -18,13 +18,14 @@ namespace Celeste.Mod.Procedurline {
         public readonly Sprite Sprite;
         public readonly string SpriteID;
         public readonly DataScopeKey ScopeKey;
+        private bool isDisposed;
         private bool hasValidKey;
         private bool customSpriteRegistered;
 
         public readonly bool OwnedByManager;
         internal int numManagerRefs;
 
-        internal bool queueReload;
+        internal bool queueReload; //Checked by the SpriteManager to trigger reloads on the main thread
 
         private bool didError = false;
         private Dictionary<string, Sprite.Animation> errorAnimations = new Dictionary<string, Sprite.Animation>(StringComparer.OrdinalIgnoreCase);
@@ -52,6 +53,9 @@ namespace Celeste.Mod.Procedurline {
 
         public void Dispose() {
             lock(LOCK) {
+                if(isDisposed) return;
+                isDisposed = true;
+
                 //Cancel tasks
                 cancelSrc?.Cancel();
                 cancelSrc?.Dispose();
@@ -68,6 +72,9 @@ namespace Celeste.Mod.Procedurline {
                     customSprite.UnregisterHandler(this);
                     customSpriteRegistered = false;
                 }
+
+                //Destroy the handler
+                ProcedurlineModule.SpriteManager.DestroySpriteHandler(this);
             }
         }
 
@@ -206,7 +213,7 @@ namespace Celeste.Mod.Procedurline {
         }
 
         private void ScopeInvalidated(IScopedInvalidatable key) => ResetCache();
-        internal void AnimationDataChange(DynamicSpriteAnimation anim) => Sprite.ReloadAnimation(((CustomSpriteAnimation) anim)?.AnimationID);
+        internal void AnimationDataChange(DynamicSpriteAnimation anim) => Sprite.ReloadAnimation((anim as CustomSpriteAnimation)?.AnimationID);
 
         internal bool DrawDebug(Scene scene, Matrix mat, Dictionary<SpriteHandler, Rectangle> rects, Dictionary<SpriteHandler, Rectangle> nrects, bool layoutPass) {
             //Build string to be drawn

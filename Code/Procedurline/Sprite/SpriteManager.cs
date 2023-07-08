@@ -89,7 +89,8 @@ namespace Celeste.Mod.Procedurline {
                 On.Monocle.Component.Removed += ComponentRemovedHook;
                 On.Monocle.Component.EntityAdded += ComponentEntityAddedHook;
                 On.Monocle.Component.EntityRemoved += ComponentEntityRemovedHook;
-                On.Monocle.Component.SceneEnd += ComponentSceneEndHook;
+                On.Monocle.Entity.SceneBegin += EntitySceneBeginHook;
+                On.Monocle.Entity.SceneEnd += EntitySceneEndHook;
 
                 On.Monocle.Image.Render += ImageRenderHook;
                 On.Monocle.Sprite.CreateClone += SpriteCreateCloneHook;
@@ -139,7 +140,8 @@ namespace Celeste.Mod.Procedurline {
             On.Monocle.Component.Removed -= ComponentRemovedHook;
             On.Monocle.Component.EntityAdded -= ComponentEntityAddedHook;
             On.Monocle.Component.EntityRemoved -= ComponentEntityRemovedHook;
-            On.Monocle.Component.SceneEnd -= ComponentSceneEndHook;
+            On.Monocle.Entity.SceneBegin -= EntitySceneBeginHook;
+            On.Monocle.Entity.SceneEnd -= EntitySceneEndHook;
 
             On.Monocle.Image.Render -= ImageRenderHook;
             On.Monocle.Sprite.CreateClone -= SpriteCreateCloneHook;
@@ -348,6 +350,18 @@ namespace Celeste.Mod.Procedurline {
         }
 
         /// <summary>
+        /// Returns the sprite's <see cref="SpriteHandler" /> wrapper, which is responsible for all sprite modifications/processing.
+        /// </summary>
+        /// <returns>
+        /// <c>null</c> if the sprite doesn't have an associated sprite handler
+        /// </returns>
+        public SpriteHandler GetSpriteHandler(Sprite sprite) {
+            lock(spriteHandlers) {
+                return spriteHandlers.TryGetValue(sprite, out SpriteHandler handler) ? handler : null;
+            }
+        }
+
+        /// <summary>
         /// Creates a <see cref="SpriteHandler" /> for the sprite. You are resposible for properly disposing it using <see cref="SpriteHandler.Dispose" /> once the sprite's not used anymore.
         /// This method should be used for sprites which Procedurline wouldn't pick up as active by itself.
         /// </summary>
@@ -366,15 +380,10 @@ namespace Celeste.Mod.Procedurline {
             }
         }
 
-        /// <summary>
-        /// Returns the sprite's <see cref="SpriteHandler" /> wrapper, which is responsible for all sprite modifications/processing.
-        /// </summary>
-        /// <returns>
-        /// <c>null</c> if the sprite doesn't have an associated sprite handler
-        /// </returns>
-        public SpriteHandler GetSpriteHandler(Sprite sprite) {
+        internal void DestroySpriteHandler(SpriteHandler handler) {
             lock(spriteHandlers) {
-                return spriteHandlers.TryGetValue(sprite, out SpriteHandler handler) ? handler : null;
+                spriteHandlers.TryRemove(handler.Sprite, out _);
+                handler.Sprite.ReloadAnimation(); //To ensure no stale references are kept
             }
         }
 
@@ -395,44 +404,38 @@ namespace Celeste.Mod.Procedurline {
         private void RemoveSpriteRef(Sprite sprite) {
             lock(spriteHandlers) {
                 if(!spriteHandlers.TryGetValue(sprite, out SpriteHandler handler)) return;
-                if(handler.OwnedByManager && --handler.numManagerRefs <= 0) {
-                    handler.Dispose();
-                    spriteHandlers.TryRemove(sprite, out _);
-                }
+                if(handler.OwnedByManager && --handler.numManagerRefs <= 0) handler.Dispose();
             }
         }
 
         private void ComponentAddedHook(On.Monocle.Component.orig_Added orig, Component comp, Entity entity) {
             orig(comp, entity);
-
-            if(comp is Sprite sprite) {
-                if(entity.Scene == null) return;
-                AddSpriteRef(sprite);
-            }
+            if(comp is Sprite sprite && entity.Scene != null && Celeste.Scene == entity.Scene) AddSpriteRef(sprite);
         }
 
         private void ComponentRemovedHook(On.Monocle.Component.orig_Removed orig, Component comp, Entity entity) {
-            if(comp is Sprite sprite) {
-                if(entity.Scene == null) return;
-                RemoveSpriteRef(sprite);
-            }
-
+            if(comp is Sprite sprite && entity.Scene != null && Celeste.Scene == entity.Scene) RemoveSpriteRef(sprite);
             orig(comp, entity);
         }
 
         private void ComponentEntityAddedHook(On.Monocle.Component.orig_EntityAdded orig, Component comp, Scene scene) {
             orig(comp, scene);
-            if(comp is Sprite sprite) AddSpriteRef(sprite);
+            if(comp is Sprite sprite && Celeste.Scene == scene) AddSpriteRef(sprite);
         }
 
         private void ComponentEntityRemovedHook(On.Monocle.Component.orig_EntityRemoved orig, Component comp, Scene scene) {
-            if(comp is Sprite sprite) RemoveSpriteRef(sprite);
+            if(comp is Sprite sprite && Celeste.Scene == scene) RemoveSpriteRef(sprite);
             orig(comp, scene);
         }
 
-        private void ComponentSceneEndHook(On.Monocle.Component.orig_SceneEnd orig, Component comp, Scene scene) {
-            if(comp is Sprite sprite) RemoveSpriteRef(sprite);
-            orig(comp, scene);
+        private void EntitySceneBeginHook(On.Monocle.Entity.orig_SceneBegin orig, Entity ent, Scene scene) {
+            orig(ent, scene);
+            foreach(Sprite sprite in ent.Components.GetAll<Sprite>()) AddSpriteRef(sprite);
+        }
+
+        private void EntitySceneEndHook(On.Monocle.Entity.orig_SceneEnd orig, Entity ent, Scene scene) {
+            foreach(Sprite sprite in ent.Components.GetAll<Sprite>()) RemoveSpriteRef(sprite);
+            orig(ent, scene);
         }
 
         private void ImageRenderHook(On.Monocle.Image.orig_Render orig, Image img) {
