@@ -1,3 +1,7 @@
+---------- CHANGELOG VERSION 2.0.14 ----------
+- Lots of bugfixes
+
+
 ---------- CHANGELOG VERSION 2.0.13 ----------
 - Fix TextureHandle download/uploads deadlocking
 - Minor other bugfixes
