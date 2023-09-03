@@ -76,7 +76,7 @@ namespace Celeste.Mod.Procedurline {
                         lock(LOCK) {
                             if(cache == null) throw new ObjectDisposedException("DataCache");
 
-                            if(noCreateNew) return cache.GetValueOrDefault(key);
+                            if(noCreateNew) return cache.TryGetValue(key, out D data) ? data : null;
 
                             return cache.GetOrAdd(key, _ => {
                                 D data = CreateScopedData(key);
