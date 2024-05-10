@@ -23,7 +23,7 @@ namespace Celeste.Mod.Procedurline.Demo {
             if(level.Session.Area.ID != DemoMapID) return;
 
             //Add backdrops
-            level.Foreground.Backdrops.Add(new Parallax(GFX.Misc["purplesunset"]) { Renderer = level.Foreground, Scroll = Vector2.One * 0.5f, Speed = Vector2.One * 4f, LoopX = true, LoopY = true, Alpha = 0.5f });
+            level.Foreground.Backdrops.Add(new Parallax(GFX.Misc["purplesunset"]) { Renderer = level.Foreground, Scroll = Vector2.One * 0.5f, Speed = Vector2.One * 4f, LoopX = true, LoopY = true, Alpha = 0.2f });
             level.Foreground.Backdrops.Add(new Parallax(GFX.Misc["mist"]) { Renderer = level.Foreground, Scroll = Vector2.One * 0.5f, Speed = new Vector2(16f, 8f), LoopX = true, LoopY = true, Alpha = 0.3f });
             level.Background.Backdrops.Add(new Parallax(GFX.Game["bgs/04/bg0"]) { Renderer = level.Background, Scroll = Vector2.UnitX * 0.2f, Speed = Vector2.UnitX * -16f, LoopX = true });
             level.Background.Backdrops.Add(new Parallax(GFX.Game["bgs/04/bg1"]) { Renderer = level.Background, Scroll = Vector2.UnitX * 0.4f, Speed = Vector2.UnitX * -24f, LoopX = true });
@@ -164,6 +164,7 @@ namespace Celeste.Mod.Procedurline.Demo {
             MapData map = area.Mode[0].MapData = new MapData(area.ToKey());
             map.Levels.Add(level);
             map.Bounds = level.Bounds;
+            map.RegenerateLevelsByNameCache();
         }
     }
 }
