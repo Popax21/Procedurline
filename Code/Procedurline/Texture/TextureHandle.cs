@@ -384,7 +384,12 @@ namespace Celeste.Mod.Procedurline {
                 if(IsLoading || HasLoaded) return;
 
                 //Don't set _Texture_Requesting to load asynchronously
+
+                //> 'VirtualAssetExt.Reload(VirtualAsset)' is obsolete: 'Use VirtualAsset.Reload instead.'
+                //- it's internal... ._.
+#pragma warning disable CS0618
                 VirtualTexture.Reload();
+#pragma warning restore CS0618
             });
         }
 

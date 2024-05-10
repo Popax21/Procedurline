@@ -98,7 +98,7 @@ namespace Celeste.Mod.Procedurline {
             try {
                 nodeData = new PlayerHairNodeData() {
                     Color = hair.GetHairColor(idx),
-                    Scale = hair.GetHairScale(idx),
+                    Scale = hair.PublicGetHairScale(idx),
                     Texture = hair.GetHairTexture(idx)
                 };
             } finally {

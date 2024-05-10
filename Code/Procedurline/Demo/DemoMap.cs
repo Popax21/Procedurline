@@ -120,6 +120,7 @@ namespace Celeste.Mod.Procedurline.Demo {
             //Build area data
             AreaData area = new AreaData() {
                 ID = DemoMapID = AreaData.Areas.Count,
+                SID = "Procedurline/pl_demo_map",
                 Name = "pl_demo_map",
                 Icon = "areas/null",
                 Interlude_Safe = true,
@@ -137,15 +138,15 @@ namespace Celeste.Mod.Procedurline.Demo {
                     null
                 }
             };
-            area.SetSID("Procedurline/pl_demo_map");
             AreaData.Areas.Add(area);
 
             //Build level data
-            LevelData level = new LevelData(new BinaryPacker.Element() { Attributes = new Dictionary<string, object>(), Children = new List<BinaryPacker.Element>() });
-            level.Name = "demo";
-            level.Music = SFX.music_city;
-            level.MusicLayers = new float[] { 1f, 1f, 1f, 1f };
-            level.Bounds = new Rectangle(0, 0, 8*64, 8*32);
+            LevelData level = new LevelData(new BinaryPacker.Element() { Attributes = new Dictionary<string, object>(), Children = new List<BinaryPacker.Element>() }) {
+                Name = "demo",
+                Music = SFX.music_city,
+                MusicLayers = new float[] { 1f, 1f, 1f, 1f },
+                Bounds = new Rectangle(0, 0, 8*64, 8*32)
+            };
             level.Spawns.Add(new Vector2(level.Bounds.Left + 4, level.Bounds.Bottom - 8*4));
 
             //Setup solids
