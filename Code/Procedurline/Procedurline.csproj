@@ -6,6 +6,7 @@
         <ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>None</ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>
         <NoWarn>1591;1573</NoWarn>
         <PathMap>$(MSBuildProjectDirectory)=X:\Procedurline\</PathMap>
+        <EnableSourceLink>false</EnableSourceLink> <!-- It leaks absolute file paths :/ -->
 
         <CelesteGamePath Condition="'$(CELESTEGAMEPATH)' == ''">..\..\..\..</CelesteGamePath>
     </PropertyGroup>
