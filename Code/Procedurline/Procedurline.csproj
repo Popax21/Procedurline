@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <TargetFramework>net462</TargetFramework>
-        <LangVersion>10.0</LangVersion>
+        <TargetFramework>net7.0</TargetFramework>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>None</ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>
@@ -9,7 +8,6 @@
         <PathMap>$(MSBuildProjectDirectory)=X:\Procedurline\</PathMap>
 
         <CelesteGamePath Condition="'$(CELESTEGAMEPATH)' == ''">..\..\..\..</CelesteGamePath>
-        <CelesteGamePath Condition="Exists('$(CELESTEGAMEPATH)\Celeste.dll')">$(CELESTEGAMEPATH)\legacyRef</CelesteGamePath>
     </PropertyGroup>
 
     <ItemDefinitionGroup>
@@ -18,14 +16,14 @@
     </ItemDefinitionGroup>
 
     <ItemGroup>
-        <PackageReference Include="MonoMod" Version="22.5.1.1" />
-        <PackageReference Include="MonoMod.RuntimeDetour" Version="22.5.1.1" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <Reference Include="Celeste" HintPath="$(CELESTEGAMEPATH)\Celeste.exe" />
+        <Reference Include="Celeste" HintPath="$(CELESTEGAMEPATH)\Celeste.dll" />
         <Reference Include="MMHOOK_Celeste" HintPath="$(CELESTEGAMEPATH)\MMHOOK_Celeste.dll" />
         <Reference Include="YamlDotNet" HintPath="$(CELESTEGAMEPATH)\YamlDotNet.dll" />
+
+        <Reference Include="Mono.Cecil" HintPath="$(CELESTEGAMEPATH)\Mono.Cecil.dll" />
+        <Reference Include="MonoMod.Core" HintPath="$(CELESTEGAMEPATH)\MonoMod.Core.dll" />
+        <Reference Include="MonoMod.Utils" HintPath="$(CELESTEGAMEPATH)\MonoMod.Utils.dll" />
+        <Reference Include="MonoMod.RuntimeDetour" HintPath="$(CELESTEGAMEPATH)\MonoMod.RuntimeDetour.dll" />
     </ItemGroup>
 
     <Choose>
@@ -46,6 +44,7 @@
 
     <Target Name="CopyDLL" AfterTargets="Build">
         <Copy SourceFiles="$(TargetPath)" DestinationFolder="../.."/>
+        <Copy SourceFiles="$(TargetPath.Replace('.dll', '.pdb'))" DestinationFolder="../.."/>
         <Copy SourceFiles="$(DocumentationFile)" DestinationFolder="../.."/>
     </Target>
 </Project>

@@ -35,7 +35,7 @@ namespace Celeste.Mod.Procedurline {
             }
 
             //Queue a sync on the main thread
-            MainThreadHelper.Do(() => {
+            MainThreadHelper.Schedule(() => {
                 lock(LOCK) {
                     if(!syncingFromThreaded) return;
                     Delay = TDelay;
@@ -59,7 +59,7 @@ namespace Celeste.Mod.Procedurline {
             }
 
             //Queue a sync on the main thread
-            MainThreadHelper.Do(() => {
+            MainThreadHelper.Schedule(() => {
                 lock(LOCK) {
                     if(!syncingToThreaded) return;
                     TDelay = Delay;

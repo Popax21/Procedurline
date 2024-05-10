@@ -2,7 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using MonoMod.Utils;
+using System.Runtime.InteropServices;
 
 namespace Celeste.Mod.Procedurline {
     /// <summary>
@@ -261,7 +261,7 @@ namespace Celeste.Mod.Procedurline {
                 //32 bit processes limit our memory
                 if(!Environment.Is64BitProcess) {
                     //On Windows, we're limited to the 4GB instead of 2GB on 64 bit machines
-                    if(PlatformHelper.Is(MonoMod.Utils.Platform.Windows) && Environment.Is64BitOperatingSystem) {
+                    if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && Environment.Is64BitOperatingSystem) {
                         maxMem = Math.Min(maxMem, 4*1024*1024*1024L);
                     } else {
                         maxMem = Math.Min(maxMem, 2*1024*1024*1024L);

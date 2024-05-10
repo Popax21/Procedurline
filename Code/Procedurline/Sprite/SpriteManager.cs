@@ -84,7 +84,7 @@ namespace Celeste.Mod.Procedurline {
             DynamicAnimationProcessor.AddProcessor(int.MinValue, new DelegateDataProcessor<Sprite, string, SpriteAnimationData>(registerScopes: (_, k) => ProcedurlineModule.DynamicScope.RegisterKey(k)).WrapAsync());
 
             //Install hooks
-            using(new DetourContext(ProcedurlineModule.HOOK_PRIO)) {
+            using(ProcedurlineModule.HOOK_CONTEXT.Use()) {
                 On.Monocle.Component.Added += ComponentAddedHook;
                 On.Monocle.Component.Removed += ComponentRemovedHook;
                 On.Monocle.Component.EntityAdded += ComponentEntityAddedHook;

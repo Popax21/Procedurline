@@ -10,6 +10,7 @@ using Monocle;
 namespace Celeste.Mod.Procedurline {
     public sealed class ProcedurlineModule : EverestModule {
         public const int HOOK_PRIO = -1000000;
+        public static readonly DetourContext HOOK_CONTEXT = new DetourConfigContext(new DetourConfig("PLHooks", priority: HOOK_PRIO));
 
         public static ProcedurlineModule Instance { get; private set; }
         public static string Name => Instance.Metadata.Name;

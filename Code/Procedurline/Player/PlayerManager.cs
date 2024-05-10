@@ -20,7 +20,7 @@ namespace Celeste.Mod.Procedurline {
         public readonly CompositeDataProcessor<PlayerHair, int, PlayerHairNodeData> HairNodeProcessor;
 
         private readonly DisposablePool hookPool = new DisposablePool();
-        [ThreadStatic] private int hairGetterHooksBypassCounter;
+        [ThreadStatic] private static int hairGetterHooksBypassCounter;
 
         public PlayerManager(Game game) : base(game) {
             game.Components.Add(this);
@@ -34,7 +34,7 @@ namespace Celeste.Mod.Procedurline {
             HairColorProcessor.AddProcessor(int.MinValue, new DelegateDataProcessor<Player, VoidBox, PlayerHairColorData>(registerScopes: (_, k) => ProcedurlineModule.PlayerScope.RegisterKey(k)));
             HairNodeProcessor.AddProcessor(int.MinValue, new DelegateDataProcessor<PlayerHair, int, PlayerHairNodeData>(registerScopes: (_, k) => ProcedurlineModule.PlayerScope.RegisterKey(k)));
 
-            using(new DetourContext(ProcedurlineModule.HOOK_PRIO)) {
+            using(ProcedurlineModule.HOOK_CONTEXT.Use()) {
                 //Install player sprite hooks
                 On.Celeste.PlayerSprite.ctor += PlayerSpriteCtorHook;
 

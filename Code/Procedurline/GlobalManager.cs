@@ -3,8 +3,6 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 
-using MonoMod.RuntimeDetour;
-
 namespace Celeste.Mod.Procedurline {
     /// <summary>
     /// Handles global state, hooks, scopes, and other miscellaneous things
@@ -86,7 +84,7 @@ namespace Celeste.Mod.Procedurline {
             MainThreadTaskFactory = new TaskFactory(MainThreadScheduler);
 
             //Install hooks
-            using(new DetourContext(ProcedurlineModule.HOOK_PRIO)) {
+            using(ProcedurlineModule.HOOK_CONTEXT.Use()) {
                 On.Monocle.Engine.Update += EngineUpdateHook;
                 On.Monocle.Engine.Draw += EngineDrawHook;
                 On.Monocle.Scene.End += SceneEndHook;

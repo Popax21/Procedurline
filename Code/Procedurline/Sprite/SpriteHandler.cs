@@ -122,7 +122,7 @@ namespace Celeste.Mod.Procedurline {
                             if(t.Exception.InnerExceptions.FirstOrDefault(e => e is OutOfMemoryException) is OutOfMemoryException oomExcpt) throw oomExcpt;
                             Logger.Log(LogLevel.Warn, ProcedurlineModule.Name, $"Error processing sprite '{SpriteID}' animation '{animId}': {t.Exception}");
                         }
-                        MainThreadHelper.Do(() => Sprite.ReloadAnimation());  
+                        MainThreadHelper.Schedule(() => Sprite.ReloadAnimation());  
                     }, cancelSrc.Token);
                 }
 

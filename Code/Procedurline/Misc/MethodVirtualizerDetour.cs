@@ -5,6 +5,9 @@ using System.Reflection;
 using Mono.Cecil.Cil;
 using MonoMod.Utils;
 using MonoMod.RuntimeDetour;
+using Celeste.Mod.Helpers.LegacyMonoMod;
+using MonoMod.Core;
+using MonoMod.Core.Platforms;
 
 namespace Celeste.Mod.Procedurline {
     //There do be dragons here...
@@ -12,14 +15,14 @@ namespace Celeste.Mod.Procedurline {
     /// Implements a detour which redirects invocations of a non-virtual base method to a virtual method contained in a child class, if the instance is of that type.
     /// Optionally also redirects the virtual method's base implementation back to the non-virtual one, which allows one to retroactively make a method virtual.
     /// </summary>
-    public sealed class MethodVirtualizerDetour : IDetour {
+    public sealed class MethodVirtualizerDetour : IDisposable {
         public readonly MethodInfo BaseMethod;
         public readonly MethodInfo VirtualMethod;
         public readonly bool CallBase;
 
-        private MethodBase detourTrampoline, redirTrampoline, baseTrampoline;
-        private Detour baseDetour;
-        private NativeDetour baseTrampolineDetour, virtualMethDetour;
+        private MethodInfo baseTrampoline, redirTrampoline;
+        private Hook baseHooke;
+        private ICoreDetour baseTrampolineDetour, virtualMethDetour;
 
         public MethodVirtualizerDetour(MethodInfo baseMeth, MethodInfo virtualMeth, bool callBase) {
             if(baseMeth.IsStatic || virtualMeth.IsStatic) throw new ArgumentException("Can't virtualize static methods!");
@@ -34,17 +37,15 @@ namespace Celeste.Mod.Procedurline {
 
             if(!virtualMeth.GetParameters().Select(p => p.ParameterType).SequenceEqual(methParams) || baseMeth.ReturnParameter.ParameterType != virtualMeth.ReturnParameter.ParameterType) throw new ArgumentException("Argument type mistmatch between base and virtual method!");
 
-            //Create "base trampoline trampoline"(tm)
+            //Create the "base trampoline trampoline"(tm)
             using(DynamicMethodDefinition methDef = new DynamicMethodDefinition($"PL_BaseTramp<{baseMeth.GetID(simple: true)}>?{GetHashCode()}", baseMeth.ReturnType, methThisParams)) {
                 baseTrampoline = methDef.StubCriticalDetour().Generate();
             }
 
-            //Create redirection trampoline
+            //Create the redirection trampoline
             using(DynamicMethodDefinition methDef = new DynamicMethodDefinition($"PL_VirtualRedir<{baseMeth.GetID(simple: true)}>?{GetHashCode()}", baseMeth.ReturnType, methThisParams)) {
                 ILProcessor il = methDef.GetILProcessor();
-
-                //No inlining
-                for(int i = 0; i < 32; i++) il.Emit(OpCodes.Nop);
+                methDef.Definition.NoInlining = true;
 
                 //Check if the object is the declaring type
                 il.Emit(OpCodes.Ldarg_0);
@@ -65,25 +66,25 @@ namespace Celeste.Mod.Procedurline {
                 redirTrampoline = methDef.Generate();
             }
 
-            //Apply base detour
-            baseDetour = new Detour(baseMeth, redirTrampoline);
+            //Apply base hook
+            baseHooke = new Hook(baseMeth, redirTrampoline);
 
             //Fix base trampoline
-            detourTrampoline = (MethodBase) typeof(Detour).GetField("_ChainedTrampoline", PatchUtils.BindAllInstance).GetValue(baseDetour);
-            baseTrampolineDetour = new NativeDetour(baseTrampoline, detourTrampoline);
+            object nextTrampoline = typeof(Hook).GetInterfaces().First(interf => interf.Name == "IDetour").GetProperty("NextTrampoline", PatchUtils.BindAllInstance).GetValue(baseHooke);
+            MethodInfo trampolineMethod = (MethodInfo) nextTrampoline.GetType().GetProperty("TrampolineMethod", PatchUtils.BindAllInstance).GetValue(nextTrampoline);
+            baseTrampolineDetour = DetourFactory.Current.CreateDetour(baseTrampoline, trampolineMethod);
 
             if(callBase) {
                 //Detour the virtual method to the base trampoline
-                virtualMethDetour = new NativeDetour(virtualMeth, detourTrampoline);
+                virtualMethDetour = DetourFactory.Current.CreateDetour(virtualMeth, trampolineMethod);
             }
         }
 
         public void Dispose() {
-            baseDetour?.Dispose();
+            baseHooke?.Dispose();
             baseTrampolineDetour?.Dispose();
 
-            baseDetour = null;
-            detourTrampoline = null;
+            baseHooke = null;
 
             redirTrampoline = null;
             baseTrampoline = null;
@@ -94,24 +95,16 @@ namespace Celeste.Mod.Procedurline {
         }
 
         public void Apply() {
-            baseDetour?.Apply();
+            baseHooke?.Apply();
             virtualMethDetour?.Apply();
         }
 
         public void Undo() {
-            baseDetour?.Undo();
+            baseHooke?.Undo();
             virtualMethDetour?.Undo();
         }
 
-        public void Free() {
-            baseDetour?.Free();
-            virtualMethDetour?.Free();
-        }
-
-        public MethodBase GenerateTrampoline(MethodBase signature = null) => baseDetour?.GenerateTrampoline(signature);
-        T IDetour.GenerateTrampoline<T>() => baseDetour?.GenerateTrampoline<T>();
-
-        public bool IsValid => baseDetour?.IsValid ?? false;
-        public bool IsApplied => baseDetour?.IsApplied ?? false;
+        public bool IsValid => baseHooke?.IsValid ?? false;
+        public bool IsApplied => baseHooke?.IsApplied ?? false;
     }
 }

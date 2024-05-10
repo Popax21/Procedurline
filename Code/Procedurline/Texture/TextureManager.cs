@@ -38,7 +38,7 @@ namespace Celeste.Mod.Procedurline {
             DerivedScope = new TextureScope("DERIVED", GlobalScope);
 
             //Install hooks
-            using(new DetourContext(ProcedurlineModule.HOOK_PRIO)) {
+            using(ProcedurlineModule.HOOK_CONTEXT.Use()) {
                 ScaledMTexture.AddHooks();
             }
         }

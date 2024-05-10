@@ -118,7 +118,7 @@ namespace Celeste.Mod.Procedurline {
                 Height = height;
 
                 //Create the texture on the main thread
-                MainThreadHelper.Do(() => {
+                MainThreadHelper.Schedule(() => {
                     lock(LOCK) {
                         if(IsDisposed) return;
                         vtex = VirtualContent.CreateTexture($"PLHANDLE/{Path}", width, height, col);
@@ -174,7 +174,7 @@ namespace Celeste.Mod.Procedurline {
                     lock(ProcedurlineModule.TextureManager.textureHandles) ProcedurlineModule.TextureManager.textureHandles.TryRemove(vtex, out _);
 
                     //Dispose the texture
-                    if(OwnsTexture) MainThreadHelper.Do(vtex.Dispose);
+                    if(OwnsTexture) MainThreadHelper.Schedule(vtex.Dispose);
                     vtex = null;
                 }
 
@@ -379,7 +379,7 @@ namespace Celeste.Mod.Procedurline {
         /// Makes Everest start to load the texture, if it hasn't already been doing so before.
         /// </summary>
         public void TriggerTextureLoad() {
-            MainThreadHelper.Do(() => {
+            MainThreadHelper.Schedule(() => {
                 if(IsDisposed) return;
                 if(IsLoading || HasLoaded) return;
 
@@ -397,7 +397,7 @@ namespace Celeste.Mod.Procedurline {
         /// Short circuits Everest's texture loading, and instead immediatly creates a blank texture if possible
         /// </summary>
         public void ShortCircuitTextureLoad() {
-            MainThreadHelper.Do(() => {
+            MainThreadHelper.Schedule(() => {
                 if(IsDisposed) return;
                 if(IsLoading || HasLoaded) return;
                 VirtualTexture.Texture = new Texture2D(Celeste.Instance.GraphicsDevice, Width, Height, false, SurfaceFormat.Color);
