@@ -46,7 +46,7 @@ namespace Celeste.Mod.Procedurline {
         /// <summary>
         /// Retrieves the associated scoped data for the given target.
         /// This generates a temporary cache key for the target and tries to look up scoped data in the cache.
-        /// If there is no scoped data chached for the target's key, new data is created and kept alive until its key gets invalidated, unless <paramref name="noCreateNew" /> is <c>true</c>.
+        /// If there is no scoped data cached for the target's key, new data is created and kept alive until its key gets invalidated, unless <paramref name="noCreateNew" /> is <c>true</c>.
         /// </summary>
         /// <returns>
         /// <c>null</c> if the target shouldn't have any associated scoped data.
@@ -54,7 +54,7 @@ namespace Celeste.Mod.Procedurline {
         public D GetScopedData(T target, DataScopeKey tkey = null, bool noCreateNew = false) {
             DataScopeKey key = CreateKey(target);
             if(key == null) return null;
-        
+
             try {
                 lock(key.LOCK) {
                     //Register the target's scopes on the cache key
@@ -75,6 +75,8 @@ namespace Celeste.Mod.Procedurline {
                         //Get or create the corresponding scoped data
                         lock(LOCK) {
                             if(cache == null) throw new ObjectDisposedException("DataCache");
+
+                            if(noCreateNew) return cache.TryGetValue(key, out D data) ? data : null;
 
                             return cache.GetOrAdd(key, _ => {
                                 D data = CreateScopedData(key);
@@ -131,7 +133,7 @@ namespace Celeste.Mod.Procedurline {
             public readonly DataProcessorCache<T, I, D> Cache;
             public readonly DataScopeKey Key;
     
-            private Dictionary<I, Tuple<bool, D>> dataCache;
+            private volatile Dictionary<I, Tuple<bool, D>> dataCache;
 
             public ScopedCache(DataProcessorCache<T, I, D> cache, DataScopeKey key) {
                 Cache = cache;
@@ -142,8 +144,12 @@ namespace Celeste.Mod.Procedurline {
                 key.OnInvalidateRegistrars += _ => OnInvalidateRegistrars?.Invoke(this);
             }
 
+            /// <summary>
+            /// WARNING: This is called with the cache key's <see
+            /// cref="DataScope.LOCK"/> held - you must not attempt to acquire the cache's <see cref="LOCK"/>! 
+            /// </summary>
             public virtual void Dispose() {
-                lock(LOCK) dataCache = null;
+                dataCache = null;
             }
 
             public void RegisterScopes(T target, DataScopeKey key) {
@@ -155,13 +161,14 @@ namespace Celeste.Mod.Procedurline {
 
             public virtual bool ProcessData(T target, DataScopeKey key, I id, ref D data) {
                 lock(LOCK) {
-                    if(dataCache == null) throw new ObjectDisposedException("DataProcessorCache.ScopedCache");
+                    Dictionary<I, Tuple<bool, D>> cache = dataCache;
+                    if(cache == null) throw new ObjectDisposedException("DataProcessorCache.ScopedCache");
 
                     //Check the key
                     if(Key != key) throw new ArgumentException("Given scope key doesn't match cache key!");
 
                     //Check the cache
-                    if(dataCache.TryGetValue(id, out Tuple<bool, D> cachedData)) {
+                    if(cache.TryGetValue(id, out Tuple<bool, D> cachedData)) {
                         if(cachedData.Item1) data = cachedData.Item2;
                         return cachedData.Item1;
                     }
@@ -181,10 +188,9 @@ namespace Celeste.Mod.Procedurline {
 
             public int NumCached {
                 get {
-                    lock(LOCK) {
-                        if(dataCache == null) return 0;
-                        else return dataCache.Count;
-                    }
+                    Dictionary<I, Tuple<bool, D>> cache = dataCache;
+                    if(cache == null) return 0;
+                    else return cache.Count;
                 }
             }
 

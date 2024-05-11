@@ -253,7 +253,17 @@ namespace Celeste.Mod.Procedurline {
         public long TotalCacheSize { get { lock(LOCK) return totalCacheSize; } }
         public long MaxCacheSize => Math.Min(ProcedurlineModule.Settings.MaxTextureCacheSize, Math.Max((MaxMemoryUsage - CurrentMemoryUsage) - ProcedurlineModule.Settings.MinTextureCacheMargin, 0));
 
-        public long CurrentMemoryUsage => Math.Max(curProc.VirtualMemorySize64, curProc.WorkingSet64);
+        public long CurrentMemoryUsage {
+            get {
+                long curUsage = curProc.WorkingSet64;
+
+                //32 bit processes are heavily limited on virtual memory as well
+                if(!Environment.Is64BitProcess) curUsage = Math.Max(curProc.VirtualMemorySize64, curUsage);
+
+                return curUsage;
+            }
+        }
+
         public long MaxMemoryUsage {
             get {
                 long maxMem = maxMemUsage;
